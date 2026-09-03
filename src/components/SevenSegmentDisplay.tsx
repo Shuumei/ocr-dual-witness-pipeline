@@ -29,7 +29,6 @@ const CELL_WIDTH = 40;
 const DOT_WIDTH = 16;
 const HEIGHT = 70;
 const ON_COLOR = "#22d3ee";
-const OFF_COLOR = "#134e4a";
 
 function Digit({ char, x }: { char: string; x: number }) {
   if (char === ".") {
@@ -38,7 +37,9 @@ function Digit({ char, x }: { char: string; x: number }) {
   const active = new Set(SEGMENTS[char] ?? []);
   return (
     <g>
-      {Object.entries(BARS).map(([name, [bx, by, bw, bh]]) => (
+      {Object.entries(BARS)
+        .filter(([name]) => active.has(name))
+        .map(([name, [bx, by, bw, bh]]) => (
         <rect
           key={name}
           x={x + bx}
@@ -46,7 +47,7 @@ function Digit({ char, x }: { char: string; x: number }) {
           width={bw}
           height={bh}
           rx={2}
-          fill={active.has(name) ? ON_COLOR : OFF_COLOR}
+          fill={ON_COLOR}
         />
       ))}
     </g>
@@ -88,10 +89,10 @@ export const SevenSegmentDisplay = forwardRef<SVGSVGElement, { meter: SampleMete
       </g>
       {meter.quality === "glare" && (
         <ellipse
-          cx={width * 0.65}
-          cy={HEIGHT * 0.35}
-          rx={width * 0.35}
-          ry={HEIGHT * 0.4}
+          cx={width * 0.8}
+          cy={HEIGHT * 0.3}
+          rx={width * 0.22}
+          ry={HEIGHT * 0.35}
           fill="white"
           opacity={0.35}
         />

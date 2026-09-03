@@ -16,8 +16,8 @@ written from scratch, and the sample "meters" are procedurally generated SVGs, n
 ```mermaid
 flowchart LR
     A[Photo / mock 7-seg display] --> B[/api/read-meter/]
-    B --> C[Witness A\nclaude-haiku]
-    B --> D[Witness B\nclaude-sonnet]
+    B --> C["Witness A\nclaude-sonnet-5, direct-read prompt"]
+    B --> D["Witness B\nclaude-sonnet-5, segment-by-segment prompt"]
     C --> E[reconcileWitnesses]
     D --> E
     E -->|exact match| F[✅ agree\nconfidence boosted]
@@ -25,8 +25,8 @@ flowchart LR
     E -->|major mismatch / different length| H[❌ disagreement\nno reading trusted]
 ```
 
-Two vision models (a cheap/fast one and a stronger one) independently read the same image. Their raw
-readings are reconciled by a pure function, [`reconcileWitnesses`](src/lib/consensus.ts):
+Two calls to the same vision model, prompted two different ways, independently read the same image.
+Their raw readings are reconciled by a pure function, [`reconcileWitnesses`](src/lib/consensus.ts):
 
 - **Exact match** → `agree`, confidence gets boosted (capped at 0.99 — two witnesses agreeing is
   strong evidence, never treated as certainty).
@@ -88,8 +88,24 @@ a custom threshold, and malformed/markdown-wrapped model output.
 
 - **No client-side API key.** All vision calls happen in `src/app/api/read-meter/route.ts`, a
   server-only Next.js route.
-- **Two different models, not one model called twice**, so the witnesses have genuinely independent
-  failure modes rather than the same model repeating its own mistake.
+- **Why both witnesses use the same model.** The first version paired `claude-haiku-4-5` (cheap/fast)
+  against `claude-sonnet-5` (stronger) as a tiered pair. In testing, Haiku returned an empty reading
+  100% of the time on this synthetic 7-segment font — it isn't a capable-enough OCR reader for this
+  input, so a "cheap vs. strong" pairing collapsed into "broken vs. working" instead of two genuine
+  witnesses. `claude-sonnet-5` also rejects the `temperature` parameter outright, so witness diversity
+  here comes from two different prompt framings (read digits directly, vs. check each digit's segments
+  individually) rather than model choice or sampling temperature.
+- **Known limitation: agreement isn't proof.** If both calls share the same underlying model, a visual
+  ambiguity that fools one prompt framing can fool the other the same way — agreement raises confidence,
+  it doesn't guarantee correctness. This surfaced directly during testing: an earlier, wider glare overlay
+  obscured enough of a "7" that both witnesses confidently agreed on "18.2" instead of "178.2" (the
+  overlay was narrowed until both readings became correct again — see git history). A production system
+  wants witnesses with genuinely uncorrelated failure modes (different model vendors, or a second sensor
+  entirely), not just two prompts against one model.
 - **Sample images are generated, not photographed.** `src/components/SevenSegmentDisplay.tsx` draws a
   real 7-segment digit layout as SVG rectangles and applies an SVG blur/glare filter for the degraded
-  samples — no external image files, no real hardware, no health data.
+  samples — no external image files, no real hardware, no health data. Only lit segments are drawn (no
+  "ghost" outline for unlit ones) — an earlier version with dim ghost segments made every digit look
+  partially like an "8" to the vision model and caused misreads.
+- **Sample rasterization is scaled 12x.** The SVG viewBox is a few hundred units across; exporting the
+  canvas at that raw size produced a ~144x78px PNG that was too small for the model to read reliably.

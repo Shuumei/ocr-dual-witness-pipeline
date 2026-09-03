@@ -5,8 +5,13 @@ import { readWitness } from "@/lib/witness";
 
 export const runtime = "nodejs";
 
-const WITNESS_A_MODEL = process.env.ANTHROPIC_WITNESS_A_MODEL ?? "claude-haiku-4-5-20251001";
-const WITNESS_B_MODEL = process.env.ANTHROPIC_WITNESS_B_MODEL ?? "claude-sonnet-5";
+// Two calls to the same model, not two different models: an earlier version paired
+// claude-haiku with claude-sonnet as a cheap/strong tier, but Haiku's vision could not
+// read this synthetic 7-segment font at all (100% empty readings across repeated tests).
+// claude-sonnet-5 also rejects the `temperature` param, so witness diversity comes
+// entirely from asking the same model to read the image two different ways -- see
+// README "Design notes".
+const WITNESS_MODEL = process.env.ANTHROPIC_WITNESS_MODEL ?? "claude-sonnet-5";
 
 const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number];
@@ -39,8 +44,10 @@ export async function POST(request: Request) {
 
   try {
     const [witnessA, witnessB] = await Promise.all([
-      readWitness(client, WITNESS_A_MODEL, "witness-a", imageBase64, mimeType),
-      readWitness(client, WITNESS_B_MODEL, "witness-b", imageBase64, mimeType),
+      readWitness(client, WITNESS_MODEL, "witness-a", imageBase64, mimeType, { prompt: "direct" }),
+      readWitness(client, WITNESS_MODEL, "witness-b", imageBase64, mimeType, {
+        prompt: "segment-by-segment",
+      }),
     ]);
 
     const result = reconcileWitnesses(witnessA, witnessB);
