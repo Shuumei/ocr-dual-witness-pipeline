@@ -1,48 +1,66 @@
 # OCR Dual-Witness Consensus Engine
 
-Reading a 7-segment digit off a low-quality photo (glare, blur, bad angle) is exactly where a single
-vision model call quietly hallucinates a digit — a `7` misread as `1`, a `8` misread as `0` — with no
-signal that anything went wrong. This demo cross-checks every reading against a second, independent
-model call and only trusts the result when both witnesses agree; disagreement gets flagged for a
-human instead of silently returned as fact.
+Reading a 7-segment digit off a low-quality photo (glare, blur, bad angle) is exactly where a
+single decoding pass quietly misreads a digit — a `7` merged into a `1`, a `0` mistaken for an
+`8` — with no signal that anything went wrong. This demo runs **two independent image-processing
+algorithms**, entirely in the browser, and only trusts a reading when both agree; disagreement
+gets flagged for a human instead of silently returned as fact.
 
-This is a clean-room reimplementation of the *dual-witness consensus* pattern used in production in
-[Unyna](https://unyna.unyhub.org) (a LINE health assistant that reads medical meter displays). No
-code, data, or real health readings from that codebase were used — the consensus algorithm here was
+No AI API, no server, no API key, no cost. Both "witnesses" are plain pixel math — see
+[Design notes](#design-notes) for why an earlier version that called a vision LLM was scrapped.
+
+This is a clean-room reimplementation of the *dual-witness consensus* pattern used in production
+in [Unyna](https://unyna.unyhub.org) (a LINE health assistant that reads medical meter displays).
+No code, data, or real health readings from that codebase were used — every algorithm here was
 written from scratch, and the sample "meters" are procedurally generated SVGs, not photos.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    A[Photo / mock 7-seg display] --> B[/api/read-meter/]
-    B --> C["Witness A\nclaude-sonnet-5, direct-read prompt"]
-    B --> D["Witness B\nclaude-sonnet-5, segment-by-segment prompt"]
-    C --> E[reconcileWitnesses]
-    D --> E
-    E -->|exact match| F[✅ agree\nconfidence boosted]
-    E -->|minor mismatch, high overlap| G[⚠️ partial-agreement\nflagged for review]
-    E -->|major mismatch / different length| H[❌ disagreement\nno reading trusted]
+    A[7-segment display, rendered to a canvas] --> B[Witness A\npoint-sample, fixed threshold]
+    A --> C[Witness B\nregion-average, adaptive threshold]
+    B --> D[reconcileWitnesses]
+    C --> D
+    D -->|exact match| E[✅ agree\nconfidence boosted]
+    D -->|minor mismatch, high overlap| F[⚠️ partial-agreement\nflagged for review]
+    D -->|major mismatch / different length| G[❌ disagreement\nno reading trusted]
 ```
 
-Two calls to the same vision model, prompted two different ways, independently read the same image.
+Both witnesses run the exact same decoding pipeline — scan left to right, at each cursor position
+sample the seven fixed segment locations of a 7-segment cell, threshold each sample to on/off, and
+look up the resulting pattern against a digit table — but they differ in *how* they sample:
+
+| | Witness A | Witness B |
+|---|---|---|
+| Sampling | single pixel at each segment's center | 3×3 grid averaged across each segment |
+| Threshold | fixed constant (128) | per-image: midpoint of the darkest and brightest pixels sampled |
+
+Single-pixel sampling is fast but fragile — one dimmed or noisy pixel flips a whole segment's
+verdict. Region-averaging is more expensive but absorbs exactly that kind of localized noise or
+blur, and the adaptive threshold recalibrates to each image's own brightness range instead of
+assuming fixed lighting (useful against the glare sample, which raises the whole frame's
+baseline brightness). [`imageDecoder.test.ts`](src/lib/imageDecoder.test.ts) has a test that dims
+one exact pixel and shows Witness A misreading it while Witness B doesn't — the two witnesses are
+genuinely independent, not just two calls that happen to differ in a name.
+
 Their raw readings are reconciled by a pure function, [`reconcileWitnesses`](src/lib/consensus.ts):
 
 - **Exact match** → `agree`, confidence gets boosted (capped at 0.99 — two witnesses agreeing is
   strong evidence, never treated as certainty).
 - **Same length, mostly matching characters** (≥75% by default) → `partial-agreement`. The
   higher-confidence witness's reading is surfaced, but always flagged `needsHumanReview`.
-- **Different lengths, or too many mismatched characters** → `disagreement`. No reading is returned —
-  better to say "unresolved" than guess.
+- **Different lengths, or too many mismatched characters** → `disagreement`. No reading is
+  returned — better to say "unresolved" than guess.
 
 ## Try it
 
 Live demo: _(add your Vercel URL after deploying)_
 
-1. Pick one of three procedurally-generated sample displays (clean / glare / blurry) — each rendered
-   live as inline SVG, no image assets committed — or upload your own photo of any digital display.
-2. Click **Analyze**. The image is sent to a Next.js API route, never directly to the LLM from the
-   browser (the API key never touches the client).
+1. Pick one of three procedurally-generated sample displays (clean / glare / blurry) — each
+   rendered live as inline SVG, no image assets committed.
+2. Click **Analyze**. The SVG is rasterized to a canvas and decoded twice, entirely client-side —
+   open the network tab, there's nothing to see.
 3. See both witnesses' raw readings and the reconciled consensus, color-coded by status.
 
 ## Run it yourself
@@ -51,61 +69,75 @@ Live demo: _(add your Vercel URL after deploying)_
 git clone https://github.com/Shuumei/ocr-dual-witness-pipeline.git
 cd ocr-dual-witness-pipeline
 npm install
-cp .env.example .env.local   # add your own ANTHROPIC_API_KEY
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Without an API key, the sample UI still renders
-and `npm run test` still runs — the consensus logic itself has no external dependency.
+Open [http://localhost:3000](http://localhost:3000). No environment variables, no API key, no
+account to sign up for — the whole app is static.
 
 ## Tests
 
-The consensus/confidence-gating logic and the vision-response parser are pure functions, unit-tested
-independently of any network call:
+The two sampling/thresholding strategies and the confidence-gating logic are pure functions,
+unit-tested against synthetic pixel buffers with a known ground truth — the expected output isn't
+a guess, it's exactly what was drawn:
 
 ```
 npm run test
 
- ✓ src/lib/consensus.test.ts  (8 tests)
- ✓ src/lib/witness.test.ts    (5 tests)
+ ✓ src/lib/consensus.test.ts     (8 tests)
+ ✓ src/lib/imageDecoder.test.ts  (8 tests)
 
  Test Files  2 passed (2)
-      Tests  13 passed (13)
+      Tests  16 passed (16)
 ```
 
-Covers: exact-match agreement with confidence boost (capped at 0.99), the classic single-digit
-7-vs-1 misread as partial agreement, full disagreement, mismatched-length readings, empty readings,
-a custom threshold, and malformed/markdown-wrapped model output.
+`imageDecoder.test.ts` covers: every digit 0-9 decoded correctly under both sampling strategies,
+a decimal point decoded in context, decoding stopping cleanly at the end of content instead of
+inventing trailing digits, a blank image returning zero confidence, and the single-dimmed-pixel
+case where the two witnesses provably disagree. `consensus.test.ts` covers: exact-match agreement
+with confidence boost (capped at 0.99), the classic single-digit 7-vs-1 misread as partial
+agreement, full disagreement, mismatched-length readings, empty readings, and a custom threshold.
+
+Manually verified against all three samples (clean/glare/blurry) through the real UI — every
+reading decoded correctly and both witnesses agreed:
+
+| Sample | Ground truth | Witness A | Witness B | Consensus |
+|---|---|---|---|---|
+| Clean | `42.8` | `42.8` (44% conf.) | `42.8` (63% conf.) | agree, `42.8`, 73% |
+| Glare | `178.2` | `178.2` (56% conf.) | `178.2` (62% conf.) | agree, `178.2`, 72% |
+| Blurry | `905.1` | `905.1` (48% conf.) | `905.1` (58% conf.) | agree, `905.1`, 68% |
 
 ## Tech stack
 
-- Next.js 16 (App Router) + TypeScript + Tailwind CSS
-- Anthropic SDK (`@anthropic-ai/sdk`) — two witness calls per request, server-side only
+- Next.js 16 (App Router) + TypeScript + Tailwind CSS — fully static, no server-side code
 - Vitest for unit tests
-- Deployed on Vercel
+- Deployed on Vercel (static export, free tier)
 
 ## Design notes
 
-- **No client-side API key.** All vision calls happen in `src/app/api/read-meter/route.ts`, a
-  server-only Next.js route.
-- **Why both witnesses use the same model.** The first version paired `claude-haiku-4-5` (cheap/fast)
-  against `claude-sonnet-5` (stronger) as a tiered pair. In testing, Haiku returned an empty reading
-  100% of the time on this synthetic 7-segment font — it isn't a capable-enough OCR reader for this
-  input, so a "cheap vs. strong" pairing collapsed into "broken vs. working" instead of two genuine
-  witnesses. `claude-sonnet-5` also rejects the `temperature` parameter outright, so witness diversity
-  here comes from two different prompt framings (read digits directly, vs. check each digit's segments
-  individually) rather than model choice or sampling temperature.
-- **Known limitation: agreement isn't proof.** If both calls share the same underlying model, a visual
-  ambiguity that fools one prompt framing can fool the other the same way — agreement raises confidence,
-  it doesn't guarantee correctness. This surfaced directly during testing: an earlier, wider glare overlay
-  obscured enough of a "7" that both witnesses confidently agreed on "18.2" instead of "178.2" (the
-  overlay was narrowed until both readings became correct again — see git history). A production system
-  wants witnesses with genuinely uncorrelated failure modes (different model vendors, or a second sensor
-  entirely), not just two prompts against one model.
-- **Sample images are generated, not photographed.** `src/components/SevenSegmentDisplay.tsx` draws a
-  real 7-segment digit layout as SVG rectangles and applies an SVG blur/glare filter for the degraded
-  samples — no external image files, no real hardware, no health data. Only lit segments are drawn (no
-  "ghost" outline for unlit ones) — an earlier version with dim ghost segments made every digit look
-  partially like an "8" to the vision model and caused misreads.
-- **Sample rasterization is scaled 12x.** The SVG viewBox is a few hundred units across; exporting the
-  canvas at that raw size produced a ~144x78px PNG that was too small for the model to read reliably.
+- **Why this isn't calling a vision LLM.** An earlier version sent the rendered image to the
+  Anthropic API instead. It got shelved for three concrete reasons, in order of how much they
+  mattered: (1) it needed a paid API key, and there was no way to hand a public portfolio demo a
+  key without either exposing it to unbounded cost from anyone who visits and clicks, or gating it
+  behind auth that defeats the point of a demo; (2) it made the "measured, not guessed" numbers in
+  this README dependent on a third-party model's behavior on a given day, instead of on code
+  anyone can read and re-run; (3) `claude-haiku-4-5` — the "cheap witness" in that version's
+  pairing — returned an empty reading 100% of the time on this synthetic font, and the "strong
+  witness" needed extended-thinking token accounting worked around before it worked at all. The
+  version here has none of those failure modes: it's plain pixel math, free, deterministic, and
+  the whole decode pipeline is inspectable in [`imageDecoder.ts`](src/lib/imageDecoder.ts).
+- **Known limitation: agreement isn't proof.** Both witnesses decode the *same* rendered image
+  with the *same* segment geometry — a systematic error in that geometry, or a genuinely ambiguous
+  pixel pattern, could fool both sampling strategies the same way. What they don't share is
+  sensitivity to *localized* noise (single-pixel dimming, small artifacts), which is exactly the
+  failure mode the `imageDecoder.test.ts` dimmed-pixel test demonstrates one witness catching and
+  the other missing.
+- **Fixed-grid assumption.** The decoder assumes a calibrated, known cell pitch — the same
+  geometry constants ([`sevenSegmentGeometry.ts`](src/lib/sevenSegmentGeometry.ts)) the renderer
+  used to draw the image. That's a deliberate, honestly-scoped choice: it's how real single-purpose
+  meter-reading cameras work (fixed mount, calibrated ROI), not a general-purpose "photograph any
+  digital display" OCR system. Arbitrary uploaded photos are out of scope here.
+- **Sample images are generated, not photographed.**
+  [`SevenSegmentDisplay.tsx`](src/components/SevenSegmentDisplay.tsx) draws a real 7-segment digit
+  layout as SVG rectangles and applies an SVG blur/glare filter for the degraded samples — no
+  external image files, no real hardware, no health data.

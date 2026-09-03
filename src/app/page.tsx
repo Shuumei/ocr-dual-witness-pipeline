@@ -2,15 +2,10 @@
 
 import { useRef, useState } from "react";
 import { SevenSegmentDisplay } from "@/components/SevenSegmentDisplay";
-import type { ConsensusResult, WitnessReading } from "@/lib/consensus";
-import { fileToBase64, svgToPngBase64 } from "@/lib/svgToPngBase64";
+import { reconcileWitnesses, type ConsensusResult, type WitnessReading } from "@/lib/consensus";
+import { decodeDisplay } from "@/lib/imageDecoder";
+import { getSvgPixels } from "@/lib/getSvgPixels";
 import { SAMPLE_METERS } from "@/lib/samples";
-
-interface ApiResponse {
-  witnessA: WitnessReading;
-  witnessB: WitnessReading;
-  result: ConsensusResult;
-}
 
 const STATUS_STYLE: Record<ConsensusResult["status"], string> = {
   agree: "bg-emerald-500/15 text-emerald-400 border-emerald-500/40",
@@ -18,12 +13,17 @@ const STATUS_STYLE: Record<ConsensusResult["status"], string> = {
   disagreement: "bg-red-500/15 text-red-400 border-red-500/40",
 };
 
+interface AnalyzeResult {
+  witnessA: WitnessReading;
+  witnessB: WitnessReading;
+  result: ConsensusResult;
+}
+
 export default function Home() {
   const [selectedSampleId, setSelectedSampleId] = useState(SAMPLE_METERS[0].id);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<ApiResponse | null>(null);
+  const [data, setData] = useState<AnalyzeResult | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const selectedSample = SAMPLE_METERS.find((m) => m.id === selectedSampleId)!;
@@ -33,27 +33,15 @@ export default function Home() {
     setError(null);
     setData(null);
     try {
-      let imageBase64: string;
-      let mimeType: string;
+      if (!svgRef.current) throw new Error("No sample rendered yet.");
+      const pixels = await getSvgPixels(svgRef.current);
 
-      if (uploadedFile) {
-        const converted = await fileToBase64(uploadedFile);
-        imageBase64 = converted.base64;
-        mimeType = converted.mimeType;
-      } else {
-        if (!svgRef.current) throw new Error("No sample rendered yet.");
-        imageBase64 = await svgToPngBase64(svgRef.current);
-        mimeType = "image/png";
-      }
+      const a = decodeDisplay(pixels, { sampleMode: "point", thresholdMode: "fixed" });
+      const b = decodeDisplay(pixels, { sampleMode: "region", thresholdMode: "adaptive" });
 
-      const res = await fetch("/api/read-meter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64, mimeType }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Request failed.");
-      setData(json as ApiResponse);
+      const witnessA: WitnessReading = { raw: a.reading, confidence: a.confidence, witness: "witness-a" };
+      const witnessB: WitnessReading = { raw: b.reading, confidence: b.confidence, witness: "witness-b" };
+      setData({ witnessA, witnessB, result: reconcileWitnesses(witnessA, witnessB) });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -66,23 +54,21 @@ export default function Home() {
       <header className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">OCR Dual-Witness Consensus Engine</h1>
         <p className="text-sm text-neutral-400">
-          Two independent vision models read the same display. They agree, we trust it. They
-          disagree, we flag it for a human instead of guessing.
+          Two independent pixel-decoding algorithms read the same display, entirely in your
+          browser. They agree, we trust it. They disagree, we flag it for a human instead of
+          guessing. No AI API, no server call, no cost.
         </p>
       </header>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-neutral-300">1. Pick a source</h2>
+        <h2 className="text-sm font-medium text-neutral-300">1. Pick a sample</h2>
         <div className="flex flex-wrap gap-2">
           {SAMPLE_METERS.map((meter) => (
             <button
               key={meter.id}
-              onClick={() => {
-                setSelectedSampleId(meter.id);
-                setUploadedFile(null);
-              }}
+              onClick={() => setSelectedSampleId(meter.id)}
               className={`rounded-md border px-3 py-1.5 text-sm transition ${
-                !uploadedFile && selectedSampleId === meter.id
+                selectedSampleId === meter.id
                   ? "border-cyan-400 bg-cyan-400/10 text-cyan-300"
                   : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
               }`}
@@ -90,28 +76,10 @@ export default function Home() {
               {meter.label}
             </button>
           ))}
-          <label className="cursor-pointer rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 hover:border-neutral-500">
-            Upload your own
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              onChange={(e) => setUploadedFile(e.target.files?.[0] ?? null)}
-            />
-          </label>
         </div>
 
         <div className="flex justify-center rounded-lg border border-neutral-800 p-6">
-          {uploadedFile ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={URL.createObjectURL(uploadedFile)}
-              alt="Uploaded meter"
-              className="max-h-40 rounded"
-            />
-          ) : (
-            <SevenSegmentDisplay ref={svgRef} meter={selectedSample} />
-          )}
+          <SevenSegmentDisplay ref={svgRef} meter={selectedSample} />
         </div>
       </section>
 
@@ -132,8 +100,8 @@ export default function Home() {
       {data && (
         <section className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
-            <WitnessCard label="Witness A" reading={data.witnessA} />
-            <WitnessCard label="Witness B" reading={data.witnessB} />
+            <WitnessCard label="Witness A · point-sample / fixed threshold" reading={data.witnessA} />
+            <WitnessCard label="Witness B · region-average / adaptive threshold" reading={data.witnessB} />
           </div>
 
           <div className={`rounded-lg border p-4 ${STATUS_STYLE[data.result.status]}`}>
