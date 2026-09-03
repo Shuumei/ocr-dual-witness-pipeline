@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeDisplay, type PixelSource } from "./imageDecoder";
+import { decodeDisplay, decodeDisplayAutoAlign, type PixelSource } from "./imageDecoder";
 import { BARS, CELL_WIDTH, DOT_WIDTH, SEGMENTS, VIEWPORT_HEIGHT } from "./sevenSegmentGeometry";
 
 const ON = [34, 211, 238] as const; // matches the renderer's cyan ON_COLOR
@@ -101,5 +101,45 @@ describe("decodeDisplay", () => {
 
     expect(point.reading).not.toBe("8"); // single-pixel probe caught the dimmed spot -> misses segment "a"
     expect(region.reading).toBe("8"); // region average is dominated by the rest of the still-lit bar
+  });
+});
+
+describe("decodeDisplayAutoAlign", () => {
+  it("recovers a reading that plain decodeDisplay misses when the content is shifted and rescaled", () => {
+    // Simulate what a cropToContent bounding box looks like: content shifted
+    // right by an unknown offset, embedded in a taller frame than the tight
+    // content itself (a stand-in for the crop margin / blank viewport
+    // padding that throws off the naive height-based scale).
+    const original = renderDigitsToPixels("905.1");
+    const shiftPx = 14;
+    const extraHeight = 20;
+    const width = original.width + shiftPx;
+    const height = original.height + extraHeight;
+    const shifted: PixelSource = { width, height, data: new Uint8ClampedArray(width * height * 4) };
+    for (let i = 3; i < shifted.data.length; i += 4) shifted.data[i] = 255;
+    for (let y = 0; y < original.height; y++) {
+      for (let x = 0; x < original.width; x++) {
+        const srcI = (y * original.width + x) * 4;
+        const dstI = ((y + extraHeight / 2) * width + (x + shiftPx)) * 4;
+        shifted.data[dstI] = original.data[srcI];
+        shifted.data[dstI + 1] = original.data[srcI + 1];
+        shifted.data[dstI + 2] = original.data[srcI + 2];
+        shifted.data[dstI + 3] = 255;
+      }
+    }
+
+    const naive = decodeDisplay(shifted, { sampleMode: "region", thresholdMode: "adaptive" });
+    const aligned = decodeDisplayAutoAlign(shifted, { sampleMode: "region", thresholdMode: "adaptive" });
+
+    expect(naive.reading).not.toBe("905.1");
+    expect(aligned.reading).toBe("905.1");
+  });
+
+  it("returns an empty reading rather than throwing on a blank image", () => {
+    const px: PixelSource = { width: 100, height: 100, data: new Uint8ClampedArray(100 * 100 * 4) };
+    for (let i = 3; i < px.data.length; i += 4) px.data[i] = 255;
+    const result = decodeDisplayAutoAlign(px, { sampleMode: "point", thresholdMode: "fixed" });
+    expect(result.reading).toBe("");
+    expect(result.confidence).toBe(0);
   });
 });

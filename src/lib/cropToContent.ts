@@ -1,0 +1,113 @@
+import type { PixelSource, Polarity } from "./imageDecoder";
+
+export interface DetectedContent {
+  pixels: PixelSource;
+  polarity: Polarity;
+}
+
+function luminanceAt(px: PixelSource, x: number, y: number): number {
+  const i = (y * px.width + x) * 4;
+  return 0.299 * px.data[i] + 0.587 * px.data[i + 1] + 0.114 * px.data[i + 2];
+}
+
+function sampleGrid(px: PixelSource, step: number): number[] {
+  const values: number[] = [];
+  for (let y = 0; y < px.height; y += step) {
+    for (let x = 0; x < px.width; x += step) values.push(luminanceAt(px, x, y));
+  }
+  return values;
+}
+
+function cornerAverage(px: PixelSource, patch = 8): number {
+  const points: [number, number][] = [
+    [0, 0],
+    [px.width - 1, 0],
+    [0, px.height - 1],
+    [px.width - 1, px.height - 1],
+  ];
+  let sum = 0;
+  let count = 0;
+  for (const [cx, cy] of points) {
+    for (let dy = 0; dy < patch && cy + dy < px.height; dy++) {
+      for (let dx = 0; dx < patch && cx + dx < px.width; dx++) {
+        const x = cx === 0 ? cx + dx : cx - dx;
+        const y = cy === 0 ? cy + dy : cy - dy;
+        sum += luminanceAt(px, x, y);
+        count++;
+      }
+    }
+  }
+  return count === 0 ? 0 : sum / count;
+}
+
+/**
+ * Best-effort auto-calibration for an arbitrary uploaded image: finds the
+ * bounding box of "content" (the display, as opposed to surrounding
+ * background) and figures out whether it's light-on-dark (our own rendered
+ * samples) or dark-on-light (many real LCDs and photos). Returns null if
+ * nothing that looks like content was found.
+ *
+ * This does not detect skew, multi-row displays, or non-7-segment fonts --
+ * it assumes a roughly front-on photo of a single line of digits.
+ */
+export function detectContent(px: PixelSource): DetectedContent | null {
+  const step = Math.max(1, Math.floor(Math.min(px.width, px.height) / 150));
+  const samples = sampleGrid(px, step);
+  const min = Math.min(...samples);
+  const max = Math.max(...samples);
+  if (max - min < 20) return null; // no meaningful contrast anywhere
+
+  const threshold = (min + max) / 2;
+  const backgroundBrightness = cornerAverage(px);
+  const polarity: Polarity = backgroundBrightness > threshold ? "dark-on-light" : "light-on-dark";
+  const isContent = (b: number) => (polarity === "dark-on-light" ? b < threshold : b > threshold);
+
+  const minContentPerLine = Math.max(2, Math.floor(Math.min(px.width, px.height) * 0.01));
+
+  let minX = px.width;
+  let maxX = -1;
+  for (let x = 0; x < px.width; x += step) {
+    let hits = 0;
+    for (let y = 0; y < px.height; y += step) if (isContent(luminanceAt(px, x, y))) hits++;
+    if (hits >= minContentPerLine) {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+    }
+  }
+
+  let minY = px.height;
+  let maxY = -1;
+  for (let y = 0; y < px.height; y += step) {
+    let hits = 0;
+    for (let x = 0; x < px.width; x += step) if (isContent(luminanceAt(px, x, y))) hits++;
+    if (hits >= minContentPerLine) {
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (maxX < minX || maxY < minY) return null;
+
+  const pad = Math.round(step * 2);
+  const x0 = Math.max(0, minX - pad);
+  const y0 = Math.max(0, minY - pad);
+  const x1 = Math.min(px.width, maxX + pad);
+  const y1 = Math.min(px.height, maxY + pad);
+  const width = x1 - x0;
+  const height = y1 - y0;
+  if (width < 4 || height < 4) return null;
+
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const srcI = ((y + y0) * px.width + (x + x0)) * 4;
+      const dstI = (y * width + x) * 4;
+      data[dstI] = px.data[srcI];
+      data[dstI + 1] = px.data[srcI + 1];
+      data[dstI + 2] = px.data[srcI + 2];
+      data[dstI + 3] = px.data[srcI + 3];
+    }
+  }
+
+  return { pixels: { width, height, data }, polarity };
+}

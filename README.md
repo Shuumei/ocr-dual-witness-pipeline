@@ -18,8 +18,11 @@ written from scratch, and the sample "meters" are procedurally generated SVGs, n
 
 ```mermaid
 flowchart LR
-    A[7-segment display, rendered to a canvas] --> B[Witness A\npoint-sample, fixed threshold]
-    A --> C[Witness B\nregion-average, adaptive threshold]
+    A1[Built-in sample, rendered to a canvas] --> B[Witness A\npoint-sample, fixed threshold]
+    A2[Uploaded image] --> X[cropToContent\nauto-detect region + polarity]
+    X --> B
+    A1 --> C[Witness B\nregion-average, adaptive threshold]
+    X --> C
     B --> D[reconcileWitnesses]
     C --> D
     D -->|exact match| E[✅ agree\nconfidence boosted]
@@ -58,10 +61,28 @@ Their raw readings are reconciled by a pure function, [`reconcileWitnesses`](src
 Live demo: _(add your Vercel URL after deploying)_
 
 1. Pick one of three procedurally-generated sample displays (clean / glare / blurry) — each
-   rendered live as inline SVG, no image assets committed.
-2. Click **Analyze**. The SVG is rasterized to a canvas and decoded twice, entirely client-side —
+   rendered live as inline SVG, no image assets committed — or upload your own image.
+2. Click **Analyze**. The image is rasterized to a canvas and decoded twice, entirely client-side —
    open the network tab, there's nothing to see.
 3. See both witnesses' raw readings and the reconciled consensus, color-coded by status.
+
+### Uploading your own image
+
+The built-in samples use a known, fixed digit layout — the decoder can assume exactly where each
+segment is. An uploaded image doesn't come with that guarantee, so the upload path runs an extra
+calibration step first: [`cropToContent`](src/lib/cropToContent.ts) finds the bounding box of the
+"display" against its background and detects whether it's light digits on dark (like the samples)
+or dark digits on light (like most real LCDs), then
+[`decodeDisplayAutoAlign`](src/lib/imageDecoder.ts) searches a small grid of plausible scale and
+offset corrections and keeps whichever decode has the fewest unrecognized characters. This is
+disclosed as **experimental** in the UI: the underlying segment decoder is tuned to this demo's
+own generated proportions, so a photo of real hardware (different segment width/height ratios,
+skew, uneven lighting) will often decode incorrectly or partially — that's an expected limitation
+of a purpose-built decoder, not a bug. It's still a genuine test of the whole pipeline end to end,
+including a case where the two witnesses land on different answers: on one hand-built test photo
+(dark digits on a light background, reading `42.8`), Witness B decoded it exactly right while
+Witness A read `42....` — the system correctly reported `disagreement` and flagged it for review
+instead of picking one and asserting it as fact.
 
 ## Run it yourself
 
@@ -85,18 +106,22 @@ a guess, it's exactly what was drawn:
 npm run test
 
  ✓ src/lib/consensus.test.ts     (8 tests)
- ✓ src/lib/imageDecoder.test.ts  (8 tests)
+ ✓ src/lib/cropToContent.test.ts (3 tests)
+ ✓ src/lib/imageDecoder.test.ts  (10 tests)
 
- Test Files  2 passed (2)
-      Tests  16 passed (16)
+ Test Files  3 passed (3)
+      Tests  21 passed (21)
 ```
 
-`imageDecoder.test.ts` covers: every digit 0-9 decoded correctly under both sampling strategies,
-a decimal point decoded in context, decoding stopping cleanly at the end of content instead of
-inventing trailing digits, a blank image returning zero confidence, and the single-dimmed-pixel
-case where the two witnesses provably disagree. `consensus.test.ts` covers: exact-match agreement
-with confidence boost (capped at 0.99), the classic single-digit 7-vs-1 misread as partial
-agreement, full disagreement, mismatched-length readings, empty readings, and a custom threshold.
+`imageDecoder.test.ts` covers: every digit 0-9 decoded correctly under both sampling strategies, a
+decimal point decoded in context, decoding stopping cleanly at the end of content instead of
+inventing trailing digits, a blank image returning zero confidence, the single-dimmed-pixel case
+where the two witnesses provably disagree, and `decodeDisplayAutoAlign` recovering a reading from
+a shifted/rescaled image that the plain decoder misses. `cropToContent.test.ts` covers: detecting
+a light-on-dark region, a dark-on-light region, and returning nothing for a flat image with no
+contrast. `consensus.test.ts` covers: exact-match agreement with confidence boost (capped at
+0.99), the classic single-digit 7-vs-1 misread as partial agreement, full disagreement,
+mismatched-length readings, empty readings, and a custom threshold.
 
 Manually verified against all three samples (clean/glare/blurry) through the real UI — every
 reading decoded correctly and both witnesses agreed:
@@ -132,11 +157,14 @@ reading decoded correctly and both witnesses agreed:
   sensitivity to *localized* noise (single-pixel dimming, small artifacts), which is exactly the
   failure mode the `imageDecoder.test.ts` dimmed-pixel test demonstrates one witness catching and
   the other missing.
-- **Fixed-grid assumption.** The decoder assumes a calibrated, known cell pitch — the same
-  geometry constants ([`sevenSegmentGeometry.ts`](src/lib/sevenSegmentGeometry.ts)) the renderer
-  used to draw the image. That's a deliberate, honestly-scoped choice: it's how real single-purpose
-  meter-reading cameras work (fixed mount, calibrated ROI), not a general-purpose "photograph any
-  digital display" OCR system. Arbitrary uploaded photos are out of scope here.
+- **Fixed-grid assumption, worked around for uploads.** The core decoder assumes a calibrated,
+  known cell pitch — the same geometry constants
+  ([`sevenSegmentGeometry.ts`](src/lib/sevenSegmentGeometry.ts)) the renderer used to draw the
+  image, which is exactly how real single-purpose meter-reading cameras work (fixed mount,
+  calibrated ROI). The upload path (`cropToContent` + `decodeDisplayAutoAlign`) is a best-effort
+  search around that assumption, not a real digit-localization model — it recovers scale and
+  position errors but not skew, curved surfaces, or a genuinely different segment font. Treat it as
+  a demonstration of the pipeline working end to end on real input, not a general OCR claim.
 - **Sample images are generated, not photographed.**
   [`SevenSegmentDisplay.tsx`](src/components/SevenSegmentDisplay.tsx) draws a real 7-segment digit
   layout as SVG rectangles and applies an SVG blur/glare filter for the degraded samples — no

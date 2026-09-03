@@ -10,10 +10,21 @@ export interface PixelSource {
 
 export type SampleMode = "point" | "region";
 export type ThresholdMode = "fixed" | "adaptive";
+/** light-on-dark: bright pixels are lit segments (our own rendered samples).
+ * dark-on-light: dark pixels are lit segments (many real LCDs/photos). */
+export type Polarity = "light-on-dark" | "dark-on-light";
 
 export interface DecodeOptions {
   sampleMode: SampleMode;
   thresholdMode: ThresholdMode;
+  polarity?: Polarity;
+  /** Logical x where scanning starts. Defaults to the renderer's fixed left
+   * margin; pass 0 when decoding an image already cropped to its content. */
+  startMargin?: number;
+  /** Override the derived pixels-per-logical-unit scale (used by the
+   * auto-align search below when a crop's height doesn't correspond to the
+   * renderer's full logical viewport). */
+  scale?: number;
 }
 
 export interface DecodeResult {
@@ -83,11 +94,17 @@ const DOT_OFFSET: [number, number] = [7, 62 + 3]; // relative to the glyph curso
 const DOT_BOX: [number, number] = [6, 6];
 const DIGIT_PRESENCE_PROBES = ["b", "f"] as const;
 
-export function decodeDisplay(px: PixelSource, options: DecodeOptions): DecodeResult {
-  const scale = px.height / VIEWPORT_HEIGHT;
-  const threshold = options.thresholdMode === "fixed" ? FIXED_THRESHOLD : computeAdaptiveThreshold(px);
+function isLit(brightness: number, threshold: number, polarity: Polarity): boolean {
+  return polarity === "dark-on-light" ? brightness < threshold : brightness > threshold;
+}
 
-  let cursor = 4;
+export function decodeDisplay(px: PixelSource, options: DecodeOptions): DecodeResult {
+  const scale = options.scale ?? px.height / VIEWPORT_HEIGHT;
+  const threshold = options.thresholdMode === "fixed" ? FIXED_THRESHOLD : computeAdaptiveThreshold(px);
+  const polarity = options.polarity ?? "light-on-dark";
+  const startMargin = options.startMargin ?? 4;
+
+  let cursor = startMargin;
   const chars: string[] = [];
   let marginSum = 0;
   let marginCount = 0;
@@ -97,7 +114,8 @@ export function decodeDisplay(px: PixelSource, options: DecodeOptions): DecodeRe
 
     const isDigit = DIGIT_PRESENCE_PROBES.some((seg) => {
       const [cx, cy] = [cursor + BARS[seg][0] + BARS[seg][2] / 2, BARS[seg][1] + BARS[seg][3] / 2];
-      return sampleBrightness(px, cx, cy, BARS[seg][2], BARS[seg][3], scale, options.sampleMode) > threshold;
+      const b = sampleBrightness(px, cx, cy, BARS[seg][2], BARS[seg][3], scale, options.sampleMode);
+      return isLit(b, threshold, polarity);
     });
 
     if (isDigit) {
@@ -106,7 +124,7 @@ export function decodeDisplay(px: PixelSource, options: DecodeOptions): DecodeRe
         const brightness = sampleBrightness(px, cursor + bx + bw / 2, by + bh / 2, bw, bh, scale, options.sampleMode);
         marginSum += Math.abs(brightness - threshold);
         marginCount++;
-        if (brightness > threshold) active.push(name);
+        if (isLit(brightness, threshold, polarity)) active.push(name);
       }
       const key = active.sort().join("");
       chars.push(SEGMENTS_TO_DIGIT[key] ?? "?");
@@ -123,7 +141,7 @@ export function decodeDisplay(px: PixelSource, options: DecodeOptions): DecodeRe
       scale,
       options.sampleMode
     );
-    if (dotBrightness > threshold) {
+    if (isLit(dotBrightness, threshold, polarity)) {
       chars.push(".");
       cursor += DOT_WIDTH;
       continue;
@@ -134,4 +152,37 @@ export function decodeDisplay(px: PixelSource, options: DecodeOptions): DecodeRe
 
   const confidence = marginCount === 0 ? 0 : Math.min(1, marginSum / marginCount / 128);
   return { reading: chars.join(""), confidence };
+}
+
+/**
+ * decodeDisplay assumes the scan starts at a known left margin and that the
+ * image height maps exactly to the renderer's full logical viewport. Both
+ * hold for our own renderer's output, but a cropped upload breaks both
+ * assumptions: cropToContent's bounding box only bounds the pixels that are
+ * actually lit, which is shorter than the full viewport (it excludes the
+ * blank margin above/below the segments) and starts at an unknown x offset
+ * (crop padding, camera framing). This sweeps a small grid of candidate
+ * scale corrections and start margins and keeps whichever decode has the
+ * fewest unrecognized digits, using confidence as a tiebreaker -- a search,
+ * not a smarter localization step, but it recovers a few pixels of
+ * misalignment without needing true digit-boundary detection.
+ */
+export function decodeDisplayAutoAlign(px: PixelSource, options: DecodeOptions): DecodeResult {
+  const baseScale = options.scale ?? px.height / VIEWPORT_HEIGHT;
+  let best: DecodeResult = { reading: "", confidence: 0 };
+  let bestScore = -Infinity;
+  for (let scaleFactor = 0.75; scaleFactor <= 1.3; scaleFactor += 0.05) {
+    for (let margin = -10; margin <= 10; margin += 1) {
+      const result = decodeDisplay(px, { ...options, startMargin: margin, scale: baseScale * scaleFactor });
+      if (result.reading.length === 0) continue;
+      const unknownCount = (result.reading.match(/\?/g) ?? []).length;
+      // Prefer fuller, cleaner reads over a short accidental match, then confidence.
+      const score = -unknownCount * 100 + result.reading.length * 2 + result.confidence;
+      if (score > bestScore) {
+        bestScore = score;
+        best = result;
+      }
+    }
+  }
+  return best;
 }
