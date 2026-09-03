@@ -80,6 +80,7 @@ export const SevenSegmentDisplay = forwardRef<SVGSVGElement, { meter: SampleMete
           </filter>
         )}
       </defs>
+      <rect x={0} y={0} width={width} height={HEIGHT + 8} fill="black" />
       <g filter={meter.quality === "blurry" ? `url(#${filterId})` : undefined}>
         {positions.map(({ char, x }, i) => (
           <Digit key={i} char={char} x={x} />

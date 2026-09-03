@@ -1,3 +1,8 @@
+// viewBox units are tiny (a handful of digit cells); scale way up so the
+// rasterized PNG has enough pixels for a vision model to resolve thin
+// segment bars instead of a blurry postage stamp.
+const RASTER_SCALE = 12;
+
 export async function svgToPngBase64(svg: SVGSVGElement): Promise<string> {
   const serialized = new XMLSerializer().serializeToString(svg);
   const svgUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(serialized)))}`;
@@ -11,11 +16,18 @@ export async function svgToPngBase64(svg: SVGSVGElement): Promise<string> {
   await loaded;
 
   const viewBox = svg.viewBox.baseVal;
+  const width = viewBox.width || image.width;
+  const height = viewBox.height || image.height;
   const canvas = document.createElement("canvas");
-  canvas.width = viewBox.width || image.width;
-  canvas.height = viewBox.height || image.height;
+  canvas.width = width * RASTER_SCALE;
+  canvas.height = height * RASTER_SCALE;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context unavailable.");
+  // The SVG's own background is a Tailwind class, which does not apply when
+  // the markup is loaded standalone via data: URI -- fill explicitly so the
+  // exported PNG isn't transparent.
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
 
   const dataUrl = canvas.toDataURL("image/png");
