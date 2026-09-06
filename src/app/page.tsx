@@ -325,7 +325,15 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
             <>
               <div className="relative max-h-72">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={URL.createObjectURL(uploadedFile)} alt="Uploaded display" className="max-h-72 rounded block" />
+                <img
+                  src={URL.createObjectURL(uploadedFile)}
+                  alt="Uploaded display"
+                  className="max-h-72 rounded block"
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    // Auto-sync visual canvas
+                  }}
+                />
                 {useCrop && (
                   <div
                     className="absolute pointer-events-none border-2 border-cyan-400 bg-cyan-400/15 transition-all rounded shadow-sm shadow-cyan-400/50"
@@ -344,11 +352,11 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
               </div>
 
               {useCrop && (
-                <div className="flex flex-col items-center gap-1.5 rounded-lg border border-cyan-800/40 bg-neutral-900/80 p-3 text-center">
-                  <span className="text-[11px] font-medium text-cyan-300">🔍 สิ่งที่ระบบจะอ่าน (Zoomed LCD):</span>
+                <div className="flex flex-col items-center gap-2 rounded-lg border border-cyan-800/40 bg-neutral-900/80 p-3 text-center">
+                  <span className="text-[11px] font-medium text-cyan-300">🔍 สิ่งที่ OCR กำลังจะอ่าน (Cropped LCD):</span>
                   <div
-                    className="relative overflow-hidden rounded border border-neutral-700 bg-black"
-                    style={{ width: "140px", height: "140px" }}
+                    className="relative overflow-hidden rounded border border-neutral-700 bg-black flex items-center justify-center"
+                    style={{ width: "160px", height: "160px" }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -356,14 +364,16 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
                       alt="Zoomed crop"
                       className="absolute max-w-none pointer-events-none"
                       style={{
-                        width: `${(100 / Math.max(1, cropBox.width)) * 140}px`,
-                        height: `${(100 / Math.max(1, cropBox.height)) * 140}px`,
-                        top: `-${(cropBox.top / Math.max(1, cropBox.height)) * 140}px`,
-                        left: `-${(cropBox.left / Math.max(1, cropBox.width)) * 140}px`,
+                        width: `${(100 / Math.max(1, cropBox.width)) * 160}px`,
+                        height: `${(100 / Math.max(1, cropBox.height)) * 160}px`,
+                        top: `-${(cropBox.top / Math.max(1, cropBox.height)) * 160}px`,
+                        left: `-${(cropBox.left / Math.max(1, cropBox.width)) * 160}px`,
                       }}
                     />
                   </div>
-                  <span className="text-[10px] text-neutral-400">ตรวจสอบให้เห็นตัวเลขชัดในช่องนี้</span>
+                  <span className="text-[10px] text-neutral-400">
+                    เลื่อนให้เห็นตัวเลขชัดเจนในช่องนี้ก่อนกด Analyze
+                  </span>
                 </div>
               )}
             </>
