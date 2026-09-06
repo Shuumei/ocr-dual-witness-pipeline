@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "กรุณาระบุ Gemini API Key (ฟรีจาก aistudio.google.com) เพื่อใช้งานโหมด AI Vision ความแม่นยำสูง",
+            "กรุณาระบุ Gemini API Key (จาก aistudio.google.com) เพื่อใช้งานโหมด Cloud Vision ความแม่นยำสูง",
           needsApiKey: true,
         },
         { status: 400 }
@@ -91,7 +91,9 @@ Return ONLY valid JSON matching this structure:
 }`;
     }
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const modelName = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
 
     const response = await fetch(geminiUrl, {
       method: "POST",

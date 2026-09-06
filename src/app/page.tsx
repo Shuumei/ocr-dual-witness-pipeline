@@ -67,16 +67,15 @@ export default function Home() {
             }}
             className="flex items-center gap-1.5 rounded-md border border-neutral-700 bg-neutral-800/80 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:border-cyan-500 hover:text-cyan-300 transition shadow-sm"
           >
-            <span>⚙️</span>
             <span>ตั้งค่า Engine / API Key</span>
-            {isAiActive && <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />}
+            {isAiActive && <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 ml-0.5" />}
           </button>
         </div>
 
         <p className="text-sm text-neutral-400">
           Cross-validates text and digit extraction using two independent decoding passes.
           When readings agree, confidence is boosted; discrepancies are flagged for review.
-          Supports offline Local SSD/Tesseract models & optional Gemini 2.0 Flash Vision AI.
+          Supports offline Local SSD/Tesseract models & Gemini 2.5 Flash Lite Vision Engine.
         </p>
       </header>
 
@@ -89,20 +88,22 @@ export default function Home() {
         }`}
       >
         <div className="flex items-center gap-2">
-          <span className="text-sm">{isAiActive ? "⚡" : "🔒"}</span>
+          <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-black/40 border border-white/10 text-neutral-300">
+            {isAiActive ? "Cloud Witness" : "Local Only"}
+          </span>
           <span>
             {engineMode === "dual_hybrid" && apiKey ? (
               <>
-                <strong className="text-cyan-200">Dual-Witness Hybrid Active:</strong> Local Model (Witness A) + Gemini 2.0 Flash (Witness B) เทียบเคียง 2 ชั้น
+                <strong className="text-cyan-200">Dual-Witness Hybrid Active:</strong> Local Model (Witness A) + Gemini 2.5 Flash Lite (Witness B) เทียบเคียง 2 ชั้น
               </>
             ) : engineMode === "ai_only" && apiKey ? (
               <>
-                <strong className="text-cyan-200">AI Vision Mode Active:</strong> Gemini 2.0 Flash ประมวลผลความแม่นยำสูง
+                <strong className="text-cyan-200">Cloud Vision Mode Active:</strong> Gemini 2.5 Flash Lite ประมวลผลความแม่นยำสูง
               </>
             ) : (
               <>
                 <strong className="text-neutral-300">Local Offline Engine (WASM):</strong> ประมวลผลในเครื่อง 100%
-                {!apiKey && " (แนะนำ: ใส่ Gemini API Key ฟรี เพื่ออ่านภาพถ่ายมือถือที่เอียง/เบลอได้แม่นยำ 99.9%)"}
+                {!apiKey && " (ตัวเลือกเสริม: ระบุ Gemini API Key เพื่อเปิดใช้งาน Cloud Vision ร่วมด้วย)"}
               </>
             )}
           </span>
@@ -116,7 +117,7 @@ export default function Home() {
           }}
           className="underline font-medium text-cyan-400 hover:text-cyan-300 whitespace-nowrap ml-3"
         >
-          {apiKey ? "เปลี่ยนโหมด" : "เปิดโหมด AI (ฟรี)"}
+          {apiKey ? "เปลี่ยนโหมด" : "เปิดโหมด Cloud (ฟรี)"}
         </button>
       </div>
 
@@ -125,8 +126,8 @@ export default function Home() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg rounded-xl border border-neutral-700 bg-neutral-900 p-6 shadow-2xl flex flex-col gap-5 text-neutral-200">
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <h3 className="text-base font-bold text-neutral-100 flex items-center gap-2">
-                ⚙️ ตั้งค่า OCR Engine & Vision AI
+              <h3 className="text-base font-bold text-neutral-100">
+                การตั้งค่า OCR Engine & Cloud Witness
               </h3>
               <button
                 onClick={() => setShowKeyModal(false)}
@@ -154,9 +155,9 @@ export default function Home() {
                     className="mt-0.5 accent-cyan-400"
                   />
                   <div>
-                    <div className="font-bold text-neutral-200">⚡ Dual-Witness Consensus (Local + Gemini AI) [แนะนำ]</div>
+                    <div className="font-bold text-neutral-200">Dual-Witness Consensus (Local + Gemini 2.5 Flash Lite) [แนะนำ]</div>
                     <div className="text-[11px] opacity-80 mt-0.5">
-                      รวมพลัง Local Model เป็น Witness A และ Gemini 2.0 Flash เป็น Witness B ช่วยตรวจสอบความถูกต้องสองรอบ
+                      รวมพลัง Local Model เป็น Witness A และ Gemini 2.5 Flash Lite เป็น Witness B ช่วยตรวจสอบความถูกต้องสองรอบ
                     </div>
                   </div>
                 </label>
@@ -176,9 +177,9 @@ export default function Home() {
                     className="mt-0.5 accent-cyan-400"
                   />
                   <div>
-                    <div className="font-bold text-neutral-200">🚀 AI Vision Direct (Gemini 2.0 Flash)</div>
+                    <div className="font-bold text-neutral-200">Cloud Vision Direct (Gemini 2.5 Flash Lite)</div>
                     <div className="text-[11px] opacity-80 mt-0.5">
-                      เหมาะสำหรับภาพถ่ายกล้องมือถือที่เอียง สะท้อนแสง ตัวเลข LCD ซ้อน หรือสลิปธนาคารที่ซับซ้อน แม่นยำ 99.9%
+                      ประมวลผลด้วย Vision Model โดยตรง เหมาะสำหรับภาพถ่ายกล้องมือถือที่เอียง สะท้อนแสง หรือสลิปธนาคารที่ซับซ้อน
                     </div>
                   </div>
                 </label>
@@ -198,7 +199,7 @@ export default function Home() {
                     className="mt-0.5 accent-cyan-400"
                   />
                   <div>
-                    <div className="font-bold text-neutral-200">🔒 Local Offline Only (WASM / Tesseract)</div>
+                    <div className="font-bold text-neutral-200">Local Offline Only (WASM / Tesseract)</div>
                     <div className="text-[11px] opacity-80 mt-0.5">
                       ทำงานในเบราว์เซอร์ 100% ไม่ส่งข้อมูลออกภายนอก ต้องครอบตัดให้ตรงตัวเลขเป๊ะและหมุนให้ตรง
                     </div>
@@ -209,14 +210,14 @@ export default function Home() {
 
             <div className="flex flex-col gap-2 pt-2 border-t border-neutral-800">
               <div className="flex items-center justify-between text-xs">
-                <label className="font-semibold text-neutral-300">Gemini API Key (จาก Google AI Studio):</label>
+                <label className="font-semibold text-neutral-300">Gemini API Key (Google AI Studio):</label>
                 <a
                   href="https://aistudio.google.com/app/apikey"
                   target="_blank"
                   rel="noreferrer"
                   className="text-cyan-400 hover:underline flex items-center gap-1"
                 >
-                  รับ API Key ฟรี (1,500 requests/วัน) ↗
+                  รับ API Key ฟรี (Google AI Studio) ↗
                 </a>
               </div>
               <input
@@ -230,6 +231,7 @@ export default function Home() {
                 Key จะถูกบันทึกไว้ใน Browser ของคุณเท่านั้น (localStorage) ไม่มีเก็บในเซิร์ฟเวอร์
               </p>
             </div>
+
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
               {apiKey && (
@@ -490,8 +492,24 @@ function MeterMode({
     setData(null);
     try {
       if (uploadedFile) {
-        const croppedCanvas = await getCroppedRotatedCanvas(uploadedFile, rotation, cropBox);
+        let effectiveRotation = rotation;
+        let croppedCanvas = await getCroppedRotatedCanvas(uploadedFile, effectiveRotation, cropBox);
+
+        // If user hasn't manually rotated, automatically detect if LCD digits are tilted
+        if (effectiveRotation === 0) {
+          try {
+            const { estimateDeskewAngle, getCanvasPixelSource } = await import("@/lib/autoDeskew");
+            const detectedAngle = estimateDeskewAngle(getCanvasPixelSource(croppedCanvas));
+            if (Math.abs(detectedAngle) >= 3) {
+              effectiveRotation = detectedAngle;
+              croppedCanvas = await getCroppedRotatedCanvas(uploadedFile, effectiveRotation, cropBox);
+              setRotation(effectiveRotation);
+            }
+          } catch {}
+        }
+
         const isAiActive = Boolean(apiKey) && engineMode !== "local_only";
+
 
         if (isAiActive && engineMode === "ai_only") {
           const base64 = croppedCanvas.toDataURL("image/jpeg", 0.95);
@@ -512,7 +530,7 @@ function MeterMode({
           const witness: WitnessReading = {
             raw: rawVal,
             confidence: d.confidence ?? 0.99,
-            witness: "AI Vision (Gemini 2.0 Flash)",
+            witness: "Cloud Vision (Gemini 2.5 Flash Lite)",
           };
           setData({
             witnessA: witness,
@@ -561,12 +579,13 @@ function MeterMode({
             witnessB = {
               raw: rawVal,
               confidence: d.confidence ?? 0.98,
-              witness: "Witness B (AI Vision Gemini 2.0 Flash)",
+              witness: "Witness B (Cloud Vision Gemini 2.5 Flash Lite)",
             };
           } else {
-            const errText = aiRes.status === "fulfilled" ? aiRes.value.error : "Failed to call AI Vision";
-            witnessB = { raw: `Error: ${errText}`, confidence: 0, witness: "Witness B (AI Vision)" };
+            const errText = aiRes.status === "fulfilled" ? aiRes.value.error : "Failed to call Cloud Vision";
+            witnessB = { raw: `Error: ${errText}`, confidence: 0, witness: "Witness B (Cloud Vision)" };
           }
+
 
           const consensus = reconcileWitnesses(witnessA, witnessB);
           const finalLines = aiLines.length > 0 ? aiLines : localLines;
@@ -670,7 +689,7 @@ function MeterMode({
           <div className="flex flex-col gap-4 rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-neutral-200">
-                🎯 LCD Alignment & Interactive Region Selector (คลิกลากกรอบบนรูปได้โดยตรง)
+                LCD Alignment & Region Selector (คลิกลากกรอบบนรูป)
               </span>
               <button
                 onClick={() => setUseCrop(!useCrop)}
@@ -687,25 +706,15 @@ function MeterMode({
             {/* Quick Presets & Rotation Controls */}
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-neutral-500">Presets:</span>
+                <span className="text-neutral-500">Presets อุปกรณ์:</span>
                 <button
                   onClick={() => {
                     setCropBox({ top: 22, left: 24, width: 44, height: 42 });
-                    setRotation(18);
-                  }}
-                  className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
-                  title="หมุนปรับเอียง 18° ตามมุมกล้อง และครอบตัดเฉพาะหน้าจอ LCD"
-                >
-                  🩺 Omron (กล้องเอียง 18°)
-                </button>
-                <button
-                  onClick={() => {
-                    setCropBox({ top: 25, left: 30, width: 40, height: 45 });
                     setRotation(0);
                   }}
                   className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
                 >
-                  🩺 Omron (หน้าตรง 0°)
+                  เครื่องวัดความดัน (Blood Pressure)
                 </button>
                 <button
                   onClick={() => {
@@ -714,10 +723,13 @@ function MeterMode({
                   }}
                   className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
                 >
-                  🩸 เครื่องวัดน้ำตาล (Accu-Chek)
+                  เครื่องวัดน้ำตาล (Glucose Meter)
                 </button>
                 <button
-                  onClick={() => setCropBox({ top: 25, left: 25, width: 50, height: 50 })}
+                  onClick={() => {
+                    setCropBox({ top: 25, left: 25, width: 50, height: 50 });
+                    setRotation(0);
+                  }}
                   className="rounded bg-neutral-800 px-2.5 py-1 text-neutral-300 hover:bg-neutral-700"
                 >
                   Center LCD
@@ -736,34 +748,51 @@ function MeterMode({
               {/* Rotation & Deskew Controls */}
               <div className="flex flex-wrap items-center gap-3 rounded border border-neutral-800/80 bg-neutral-950/40 p-2.5 text-xs text-neutral-300">
                 <span className="text-neutral-400 font-medium">หมุนภาพ (Rotate / Deskew):</span>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={async () => {
+                      if (!uploadedFile) return;
+                      try {
+                        const { estimateDeskewAngle, getCanvasPixelSource } = await import("@/lib/autoDeskew");
+                        const c = await getCroppedRotatedCanvas(uploadedFile, rotation, cropBox);
+                        const angle = estimateDeskewAngle(getCanvasPixelSource(c));
+                        if (angle !== 0) {
+                          setRotation((r) => Math.max(-45, Math.min(45, r + angle)));
+                        }
+                      } catch {}
+                    }}
+                    className="rounded border border-cyan-500/60 bg-cyan-950/70 px-2.5 py-1 text-cyan-300 font-bold hover:bg-cyan-900 transition flex items-center gap-1 shadow-sm"
+                    title="ตรวจจับมุมเอียงของตัวเลขและหมุนปรับให้ตั้งตรงอัตโนมัติ"
+                  >
+                    <span>Auto-Deskew (ปรับตรงอัตโนมัติ)</span>
+                  </button>
                   <button
                     onClick={() => setRotation((r) => (r - 90 + 360) % 360)}
                     className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 hover:border-cyan-500 hover:text-cyan-300"
                     title="หมุนซ้าย 90°"
                   >
-                    ↺ -90°
+                    -90°
                   </button>
                   <button
                     onClick={() => setRotation((r) => (r + 90) % 360)}
                     className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 hover:border-cyan-500 hover:text-cyan-300"
                     title="หมุนขวา 90°"
                   >
-                    ↻ +90°
+                    +90°
                   </button>
                   <button
                     onClick={() => setRotation((r) => r - 5)}
                     className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 hover:border-cyan-500 hover:text-cyan-300"
                     title="เอียงซ้าย 5°"
                   >
-                    ⟲ -5°
+                    -5°
                   </button>
                   <button
                     onClick={() => setRotation((r) => r + 5)}
                     className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 hover:border-cyan-500 hover:text-cyan-300"
                     title="เอียงขวา 5°"
                   >
-                    ⟳ +5°
+                    +5°
                   </button>
                   {rotation !== 0 && (
                     <button
@@ -838,7 +867,7 @@ function MeterMode({
             </div>
 
             <p className="text-[11px] text-neutral-400">
-              💡 <strong>คำแนะนำ:</strong> ใช้เมาส์<strong>คลิกลากบนรูปด้านล่าง</strong>เพื่อครอบเฉพาะหน้าจอ LCD หรือใช้ปุ่มหมุนภาพให้ตัวเลขตั้งตรงก่อนกด Analyze
+              คำแนะนำ: คลิกลากบนรูปเพื่อครอบเฉพาะหน้าจอ หรือใช้ปุ่มหมุนภาพ/Auto-Deskew ให้ตัวเลขตั้งตรงก่อนกด Analyze
             </p>
           </div>
         )}
@@ -882,12 +911,12 @@ function MeterMode({
               {/* Exact Zoomed Cropped Preview Canvas */}
               {useCrop && (
                 <div className="flex flex-col items-center gap-2 rounded-lg border border-cyan-800/40 bg-neutral-900/90 p-3 text-center">
-                  <span className="text-xs font-semibold text-cyan-300">🔍 สิ่งที่ Local Model กำลังจะอ่าน:</span>
+                  <span className="text-xs font-semibold text-cyan-300">ภาพที่ส่งเข้าโมเดล (Cropped Region):</span>
                   <div className="relative overflow-hidden rounded border border-neutral-700 bg-neutral-950 flex items-center justify-center shadow-inner">
                     <canvas ref={previewCanvasRef} width={180} height={180} className="block rounded" />
                   </div>
                   <span className="text-[10px] text-neutral-400 max-w-[200px]">
-                    ตรวจสอบให้เห็นตัวเลขชัดเจนในกรอบนี้ และไม่มีขอบผ้าหรือสิ่งรบกวน
+                    ตรวจสอบให้เห็นตัวเลขชัดเจนในกรอบนี้ และไม่มีขอบปุ่มหรือสิ่งรบกวน
                   </span>
                 </div>
               )}
@@ -905,17 +934,16 @@ function MeterMode({
       >
         {loading
           ? Boolean(apiKey) && engineMode === "ai_only"
-            ? "Analyzing with Gemini 2.0 Flash Vision AI..."
+            ? "Analyzing with Gemini 2.5 Flash Lite..."
             : Boolean(apiKey) && engineMode === "dual_hybrid"
-            ? "Analyzing Dual-Witness (Local SSD + Gemini AI)..."
+            ? "Analyzing Dual-Witness (Local SSD + Gemini 2.5 Flash Lite)..."
             : "Reading 7-Segment LCD with Local Model..."
           : Boolean(apiKey) && engineMode === "ai_only"
-          ? "🚀 Analyze (Gemini 2.0 Flash Vision AI)"
+          ? "Analyze (Gemini 2.5 Flash Lite)"
           : Boolean(apiKey) && engineMode === "dual_hybrid"
-          ? "⚡ Analyze (Dual-Witness: Local SSD + Gemini AI)"
+          ? "Analyze (Dual-Witness: Local SSD + Gemini 2.5 Flash Lite)"
           : "Analyze (Local 7-Segment Model)"}
       </button>
-
 
       {error && (
         <p className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400">{error}</p>
@@ -937,7 +965,7 @@ function MeterMode({
             </div>
             <p className="text-2xl font-bold mt-1">{data.result.consensus ?? "unresolved"}</p>
             {data.result.needsHumanReview && (
-              <p className="mt-1 text-xs text-amber-300">⚠️ Flagged for human review — ค่าระหว่าง 2 Witness มีความต่าง</p>
+              <p className="mt-1 text-xs text-amber-300">Flagged for review: ค่าระหว่าง 2 Witness มีความต่าง</p>
             )}
 
             {/* Blood pressure / multi-row parameter breakdown */}
@@ -983,7 +1011,7 @@ function MeterMode({
           {data.isLikelyDocOrSlip && uploadedFile && (
             <div className="flex flex-col gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-200">
               <p className="font-semibold text-amber-300">
-                ⚠️ ภาพนี้อาจเป็น สลิปโอนเงิน หรือ เอกสารข้อความทั่วไป (ไม่ใช่หน้าปัด 7-segment)
+                แจ้งเตือน: ภาพนี้อาจเป็นสลิปโอนเงิน หรือ เอกสารข้อความทั่วไป (ไม่ใช่หน้าปัด 7-segment)
               </p>
               <p className="text-neutral-300">
                 โหมด Meter reading ออกแบบมาเฉพาะหน้าปัดตัวเลขดิจิตอล 7-segment (เช่น เครื่องวัดความดัน, มิเตอร์ไฟ)
@@ -993,7 +1021,7 @@ function MeterMode({
                 onClick={() => onSwitchToDocument(uploadedFile)}
                 className="mt-1 w-fit rounded bg-amber-400 px-3 py-1.5 font-medium text-neutral-950 transition hover:bg-amber-300"
               >
-                👉 สลับไปที่โหมด Document / UI ด้วยภาพนี้
+                สลับไปที่โหมด Document / UI ด้วยภาพนี้
               </button>
             </div>
           )}
@@ -1002,6 +1030,7 @@ function MeterMode({
     </div>
   );
 }
+
 
 function MeterWitnessCard({ label, reading }: { label: string; reading: WitnessReading }) {
   return (
@@ -1045,7 +1074,7 @@ function SmartSlipCard({ slip, typeName }: { slip: BankSlipData; typeName: strin
         </div>
         {slip.isSuccessful && (
           <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-medium">
-            ✓ โอนเงินสำเร็จ
+            โอนเงินสำเร็จ
           </span>
         )}
       </div>
@@ -1093,7 +1122,6 @@ function SmartReceiptCard({ receipt, typeName }: { receipt: ReceiptData; typeNam
     <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5 shadow-lg flex flex-col gap-4">
       <div className="flex items-center justify-between border-b border-amber-500/20 pb-3">
         <div className="flex items-center gap-2">
-          <span className="text-base">🧾</span>
           <span className="text-sm font-bold text-amber-300">{receipt.merchantName || typeName}</span>
         </div>
         {receipt.taxId && (
@@ -1102,6 +1130,7 @@ function SmartReceiptCard({ receipt, typeName }: { receipt: ReceiptData; typeNam
           </span>
         )}
       </div>
+
 
       <div className="grid grid-cols-2 gap-3 text-center">
         {receipt.totalFormatted && (
@@ -1165,7 +1194,7 @@ function DocumentMode({
       const isAiActive = Boolean(apiKey) && engineMode !== "local_only";
 
       if (isAiActive && engineMode === "ai_only") {
-        setProgress({ status: "Calling Gemini 2.0 Flash Vision AI...", progress: 0.5 });
+        setProgress({ status: "Calling Gemini 2.5 Flash Lite...", progress: 0.5 });
         const base64 = await fileToBase64(file);
         const res = await fetch("/api/vision", {
           method: "POST",
@@ -1173,7 +1202,7 @@ function DocumentMode({
           body: JSON.stringify({ imageBase64: base64, mode: "document", apiKey }),
         });
         const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "AI Vision error");
+        if (!res.ok) throw new Error(json.error || "Cloud Vision error");
         const d = json.data;
 
         const { buildIntelligenceFromVision } = await import("@/lib/documentIntelligence");
@@ -1183,7 +1212,7 @@ function DocumentMode({
         const witness: TextWitnessResult = {
           text: md,
           confidence: d.confidence ?? 0.99,
-          witness: "Gemini 2.0 Flash Vision AI",
+          witness: "Cloud Vision (Gemini 2.5 Flash Lite)",
         };
 
         setData({
@@ -1203,7 +1232,7 @@ function DocumentMode({
 
         setActiveView(intelligence.docType !== "general_document" ? "smart" : "formatted");
       } else if (isAiActive && engineMode === "dual_hybrid") {
-        setProgress({ status: "Running Dual-Witness: Local Tesseract + Gemini 2.0 Flash...", progress: 0.2 });
+        setProgress({ status: "Running Dual-Witness: Local Tesseract + Gemini 2.5 Flash Lite...", progress: 0.2 });
         const base64Promise = fileToBase64(file);
         const { runDualTextOcr } = await import("@/lib/textOcr");
 
@@ -1237,14 +1266,14 @@ function DocumentMode({
           wb = {
             text: d.markdown || "",
             confidence: d.confidence ?? 0.99,
-            witness: "Witness B (AI Vision Gemini 2.0 Flash)",
+            witness: "Witness B (Cloud Vision Gemini 2.5 Flash Lite)",
           };
           aiIntelligence = buildIntelligenceFromVision(d);
         } else {
           wb = {
-            text: `AI Vision Error: ${aiRes.error || "Unknown error"}`,
+            text: `Cloud Vision Error: ${aiRes.error || "Unknown error"}`,
             confidence: 0,
-            witness: "Witness B (AI Vision)",
+            witness: "Witness B (Cloud Vision)",
           };
         }
 
@@ -1304,7 +1333,6 @@ function DocumentMode({
       setProgress(null);
     }
   }
-
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
@@ -1377,12 +1405,11 @@ function DocumentMode({
         {loading
           ? progress?.status ?? "Reading text & analyzing document..."
           : Boolean(apiKey) && engineMode === "ai_only"
-          ? "🚀 Analyze Document (Gemini 2.0 Flash AI)"
+          ? "Analyze Document (Gemini 2.5 Flash Lite)"
           : Boolean(apiKey) && engineMode === "dual_hybrid"
-          ? "⚡ Analyze Document (Dual-Witness: Tesseract + Gemini AI)"
+          ? "Analyze Document (Dual-Witness: Tesseract + Gemini 2.5 Flash Lite)"
           : "Analyze Document (Local Smart Thai OCR)"}
       </button>
-
 
       {loading && progress && (
         <div className="flex flex-col gap-1.5">
@@ -1438,7 +1465,7 @@ function DocumentMode({
                         : "text-neutral-400 hover:text-neutral-200"
                     }`}
                   >
-                    ✨ สรุปข้อมูลอัจฉริยะ (Smart Card)
+                    ข้อมูลสรุปโครงสร้าง (Structured Card)
                   </button>
                   <button
                     onClick={() => setActiveView("formatted")}
@@ -1448,7 +1475,7 @@ function DocumentMode({
                         : "text-neutral-400 hover:text-neutral-200"
                     }`}
                   >
-                    📝 รูปแบบเอกสาร (Markdown)
+                    รูปแบบเอกสาร (Markdown)
                   </button>
                   <button
                     onClick={() => setActiveView("json")}
@@ -1458,7 +1485,7 @@ function DocumentMode({
                         : "text-neutral-400 hover:text-neutral-200"
                     }`}
                   >
-                    📊 ข้อมูล JSON
+                    ข้อมูล JSON
                   </button>
                 </div>
 
@@ -1473,7 +1500,7 @@ function DocumentMode({
                     }
                     className="text-xs text-neutral-300 hover:text-cyan-300 border border-neutral-700 px-2.5 py-1 rounded transition"
                   >
-                    {copied ? "✓ คัดลอกแล้ว!" : activeView === "json" ? "Copy JSON" : "Copy Text"}
+                    {copied ? "คัดลอกแล้ว" : activeView === "json" ? "Copy JSON" : "Copy Text"}
                   </button>
                   <button
                     onClick={() => downloadMarkdown(resolvedMarkdown)}
@@ -1500,7 +1527,7 @@ function DocumentMode({
                   )}
                   {data.intelligence?.docType === "general_document" && (
                     <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4 text-xs text-neutral-300 flex flex-col gap-2">
-                      <span className="font-semibold text-cyan-300">📄 ข้อมูลการวิเคราะห์เอกสาร:</span>
+                      <span className="font-semibold text-cyan-300">ข้อมูลการวิเคราะห์เอกสาร:</span>
                       <ul className="list-disc list-inside space-y-1 text-neutral-400">
                         {data.intelligence.keyInsights.map((insight, idx) => (
                           <li key={idx}>{insight}</li>
@@ -1508,7 +1535,6 @@ function DocumentMode({
                       </ul>
                     </div>
                   )}
-
                   {/* Render Structured Markdown underneath the card */}
                   <RenderedMarkdownViewer markdown={resolvedMarkdown} />
                 </div>

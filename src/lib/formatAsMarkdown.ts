@@ -90,7 +90,7 @@ export function linesToMarkdown(lines: OcrLine[]): string {
 
   // If a clean markdown table was extracted for line items in receipts/invoices, append it
   if (intel.extractedMarkdownTable) {
-    rendered.push("\n### 📋 ตารางรายการสินค้า / บริการ\n" + intel.extractedMarkdownTable);
+    rendered.push("\n### ตารางรายการสินค้า / บริการ\n" + intel.extractedMarkdownTable);
   }
 
   return rendered.join("\n\n");

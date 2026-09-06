@@ -482,8 +482,9 @@ export function buildIntelligenceFromVision(d: VisionDocumentData): DocumentInte
     extractedMarkdownTable,
     keyInsights: [
       `ตรวจพบ: ${typeNameTh}`,
-      "วิเคราะห์ด้วย AI Vision (Google Gemini 2.0 Flash)",
+      "วิเคราะห์ด้วย Cloud Vision Engine (Google Gemini 2.5 Flash Lite)",
     ],
   };
 }
+
 
