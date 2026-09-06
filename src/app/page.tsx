@@ -241,22 +241,22 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
                 <div className="flex flex-wrap gap-1.5 text-xs">
                   <span className="text-neutral-500 py-1">Quick Presets:</span>
                   <button
+                    onClick={() => setCropBox({ top: 30, left: 38, width: 26, height: 24 })}
+                    className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
+                  >
+                    🎯 เครื่องวัดความดัน (Omron แนวตั้ง)
+                  </button>
+                  <button
+                    onClick={() => setCropBox({ top: 12, left: 38, width: 25, height: 26 })}
+                    className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
+                  >
+                    🎯 เครื่องวัดน้ำตาล (Accu-Chek)
+                  </button>
+                  <button
                     onClick={() => setCropBox({ top: 20, left: 15, width: 70, height: 60 })}
                     className="rounded bg-neutral-800 px-2 py-1 text-neutral-300 hover:bg-neutral-700"
                   >
                     Center LCD
-                  </button>
-                  <button
-                    onClick={() => setCropBox({ top: 25, left: 10, width: 80, height: 65 })}
-                    className="rounded bg-neutral-800 px-2 py-1 text-cyan-400 hover:bg-neutral-700"
-                  >
-                    เครื่องวัดความดัน (Omron)
-                  </button>
-                  <button
-                    onClick={() => setCropBox({ top: 20, left: 20, width: 60, height: 50 })}
-                    className="rounded bg-neutral-800 px-2 py-1 text-cyan-400 hover:bg-neutral-700"
-                  >
-                    เครื่องวัดน้ำตาล (Accu-Chek)
                   </button>
                   <button
                     onClick={() => setCropBox({ top: 0, left: 0, width: 100, height: 100 })}
@@ -293,7 +293,7 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
                     Width ({cropBox.width}%)
                     <input
                       type="range"
-                      min="20"
+                      min="10"
                       max="100"
                       value={cropBox.width}
                       onChange={(e) => setCropBox({ ...cropBox, width: Number(e.target.value) })}
@@ -304,7 +304,7 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
                     Height ({cropBox.height}%)
                     <input
                       type="range"
-                      min="20"
+                      min="10"
                       max="100"
                       value={cropBox.height}
                       onChange={(e) => setCropBox({ ...cropBox, height: Number(e.target.value) })}
@@ -315,32 +315,58 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
               </div>
             )}
             <p className="text-xs text-neutral-500">
-              💡 Tip สำหรับเครื่องวัดความดัน / น้ำตาล: เลือก Preset ด้านบนเพื่อจัดตำแหน่งกรอบสีฟ้าให้ครอบหน้าปัดตัวเลข
+              💡 Tip: กดปุ่ม Preset ด้านบน หรือเลื่อนปรับกรอบสีฟ้าให้ครอบ **เฉพาะหน้าจอ LCD ที่มีตัวเลข** (หลีกเลี่ยงลายผ้าปูเตียงหรือปุ่มกด)
             </p>
           </div>
         )}
 
-        <div className="relative flex justify-center rounded-lg border border-neutral-800 bg-black/50 p-6 overflow-hidden">
+        <div className="relative flex flex-col md:flex-row items-center justify-center gap-6 rounded-lg border border-neutral-800 bg-black/50 p-6 overflow-hidden">
           {uploadedFile ? (
-            <div className="relative max-h-72">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={URL.createObjectURL(uploadedFile)} alt="Uploaded display" className="max-h-72 rounded block" />
+            <>
+              <div className="relative max-h-72">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={URL.createObjectURL(uploadedFile)} alt="Uploaded display" className="max-h-72 rounded block" />
+                {useCrop && (
+                  <div
+                    className="absolute pointer-events-none border-2 border-cyan-400 bg-cyan-400/15 transition-all rounded shadow-sm shadow-cyan-400/50"
+                    style={{
+                      top: `${cropBox.top}%`,
+                      left: `${cropBox.left}%`,
+                      width: `${cropBox.width}%`,
+                      height: `${cropBox.height}%`,
+                    }}
+                  >
+                    <span className="absolute -top-5 left-0 rounded bg-cyan-500 px-1 text-[10px] font-mono text-black font-bold whitespace-nowrap">
+                      LCD Area
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {useCrop && (
-                <div
-                  className="absolute pointer-events-none border-2 border-cyan-400 bg-cyan-400/10 transition-all rounded shadow-sm shadow-cyan-400/50"
-                  style={{
-                    top: `${cropBox.top}%`,
-                    left: `${cropBox.left}%`,
-                    width: `${cropBox.width}%`,
-                    height: `${cropBox.height}%`,
-                  }}
-                >
-                  <span className="absolute -top-5 left-0 rounded bg-cyan-500 px-1 text-[10px] font-mono text-black font-bold">
-                    LCD Area
-                  </span>
+                <div className="flex flex-col items-center gap-1.5 rounded-lg border border-cyan-800/40 bg-neutral-900/80 p-3 text-center">
+                  <span className="text-[11px] font-medium text-cyan-300">🔍 สิ่งที่ระบบจะอ่าน (Zoomed LCD):</span>
+                  <div
+                    className="relative overflow-hidden rounded border border-neutral-700 bg-black"
+                    style={{ width: "140px", height: "140px" }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={URL.createObjectURL(uploadedFile)}
+                      alt="Zoomed crop"
+                      className="absolute max-w-none pointer-events-none"
+                      style={{
+                        width: `${(100 / Math.max(1, cropBox.width)) * 140}px`,
+                        height: `${(100 / Math.max(1, cropBox.height)) * 140}px`,
+                        top: `-${(cropBox.top / Math.max(1, cropBox.height)) * 140}px`,
+                        left: `-${(cropBox.left / Math.max(1, cropBox.width)) * 140}px`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-neutral-400">ตรวจสอบให้เห็นตัวเลขชัดในช่องนี้</span>
                 </div>
               )}
-            </div>
+            </>
           ) : (
             <SevenSegmentDisplay ref={svgRef} meter={selectedSample} />
           )}
