@@ -41,14 +41,8 @@ function cornerAverage(px: PixelSource, patch = 8): number {
 }
 
 /**
- * Best-effort auto-calibration for an arbitrary uploaded image: finds the
- * bounding box of "content" (the display, as opposed to surrounding
- * background) and figures out whether it's light-on-dark (our own rendered
- * samples) or dark-on-light (many real LCDs and photos). Returns null if
- * nothing that looks like content was found.
- *
- * This does not detect skew, multi-row displays, or non-7-segment fonts --
- * it assumes a roughly front-on photo of a single line of digits.
+ * Detects display bounding box and polarity (light-on-dark vs dark-on-light)
+ * from pixel contrast. Returns null if contrast is insufficient.
  */
 export function detectContent(px: PixelSource): DetectedContent | null {
   const step = Math.max(1, Math.floor(Math.min(px.width, px.height) / 150));

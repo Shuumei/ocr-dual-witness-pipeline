@@ -155,17 +155,9 @@ export function decodeDisplay(px: PixelSource, options: DecodeOptions): DecodeRe
 }
 
 /**
- * decodeDisplay assumes the scan starts at a known left margin and that the
- * image height maps exactly to the renderer's full logical viewport. Both
- * hold for our own renderer's output, but a cropped upload breaks both
- * assumptions: cropToContent's bounding box only bounds the pixels that are
- * actually lit, which is shorter than the full viewport (it excludes the
- * blank margin above/below the segments) and starts at an unknown x offset
- * (crop padding, camera framing). This sweeps a small grid of candidate
- * scale corrections and start margins and keeps whichever decode has the
- * fewest unrecognized digits, using confidence as a tiebreaker -- a search,
- * not a smarter localization step, but it recovers a few pixels of
- * misalignment without needing true digit-boundary detection.
+ * Decodes display content across candidate scale factors and horizontal offsets.
+ * Selects the candidate with the fewest unrecognized segments and highest confidence
+ * to compensate for boundary padding or scale variations.
  */
 export function decodeDisplayAutoAlign(px: PixelSource, options: DecodeOptions): DecodeResult {
   const baseScale = options.scale ?? px.height / VIEWPORT_HEIGHT;

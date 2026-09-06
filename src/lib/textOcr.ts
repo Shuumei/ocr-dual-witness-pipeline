@@ -31,12 +31,9 @@ async function runOcrPass(worker: Tesseract.Worker, psm: Tesseract.PSM, image: T
 }
 
 /**
- * Two witnesses over the same open-source OCR engine, differentiated by page
- * segmentation strategy rather than model or vendor (mirrors the
- * point-vs-region-sample split used for the 7-segment decoder): AUTO lets
- * Tesseract find its own text blocks, SPARSE_TEXT treats the image as
- * scattered text with no assumed layout -- the two genuinely disagree on
- * UI screenshots with icons and short disconnected labels.
+ * Executes dual-pass OCR using different page segmentation modes (PSM).
+ * Witness A runs AUTO (automatic layout analysis) and Witness B runs SPARSE_TEXT
+ * (scattered text without layout assumption) to cross-check structural ambiguity.
  */
 export async function runDualTextOcr(
   image: Tesseract.ImageLike,

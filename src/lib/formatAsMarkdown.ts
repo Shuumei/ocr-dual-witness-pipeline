@@ -12,14 +12,9 @@ const BULLET_PATTERN = /^[-•*▪○●]\s+/;
 type BlockKind = "h1" | "h2" | "list" | "paragraph";
 
 /**
- * Turns OCR'd lines into Markdown using only their geometry -- no language
- * model, no guessing at intent. Line height relative to the page's median
- * line height becomes headings; a leading bullet glyph becomes a list item;
- * everything else is a paragraph. Consecutive paragraph lines with a small
- * vertical gap are merged into one paragraph; a larger gap starts a new one.
- * This is a mechanical layout heuristic, not document understanding -- it
- * will misjudge unusual layouts (multi-column text, rotated text, dense
- * tables), and that's a disclosed limitation, not a bug.
+ * Converts OCR line bounding boxes into structured Markdown based on layout geometry.
+ * Line heights relative to the page median determine heading levels, bullet markers
+ * become list items, and adjacent lines with small vertical gaps are merged into paragraphs.
  */
 export function linesToMarkdown(lines: OcrLine[]): string {
   const usable = lines.filter((l) => l.text.trim().length > 0);

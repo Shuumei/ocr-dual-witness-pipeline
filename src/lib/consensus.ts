@@ -1,9 +1,6 @@
 export interface WitnessReading {
-  /** Digits/characters the witness read off the display, e.g. "182.4" */
   raw: string;
-  /** Self-reported confidence from the vision model, 0-1 */
   confidence: number;
-  /** Model/prompt identity, for debugging which witness said what */
   witness: string;
 }
 
@@ -17,9 +14,7 @@ export interface CharDiff {
 
 export interface ConsensusResult {
   status: ConsensusStatus;
-  /** Final reading to trust, or null if the witnesses could not be reconciled */
   consensus: string | null;
-  /** Combined confidence, 0-1 */
   confidence: number;
   diff: CharDiff[];
   needsHumanReview: boolean;
@@ -28,10 +23,9 @@ export interface ConsensusResult {
 const PARTIAL_AGREEMENT_THRESHOLD = 0.75;
 
 /**
- * Reconciles two independent vision readings of the same display.
- * Two witnesses agreeing on a misread digit is the actual failure mode this
- * guards against (e.g. both mistaking "7" for "1" under glare) -- exact match
- * still only earns a confidence boost, never a free pass to 1.0.
+ * Reconciles two independent OCR readings of the same display.
+ * Exact match boosts confidence (capped at 0.99). Mismatched readings
+ * above the threshold are flagged for manual review.
  */
 export function reconcileWitnesses(
   a: WitnessReading,

@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "OCR Dual-Witness Consensus Engine",
-  description: "Two independent vision models cross-check a 7-segment display reading before trusting it.",
+  description: "Dual-witness client-side OCR consensus engine for 7-segment displays and documents.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
