@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SevenSegmentDisplay } from "@/components/SevenSegmentDisplay";
 import { reconcileWitnesses, type ConsensusResult, type WitnessReading } from "@/lib/consensus";
 import { decodeDisplay, decodeDisplayAutoAlign, type PixelSource, type Polarity } from "@/lib/imageDecoder";
@@ -93,6 +93,74 @@ function runMeterWitnesses(pixels: PixelSource, polarity: Polarity, autoAlign: b
   return { witnessA, witnessB, result: reconcileWitnesses(witnessA, witnessB) };
 }
 
+async function getCroppedRotatedCanvas(
+  file: File,
+  rotation: number,
+  cropBox: { top: number; left: number; width: number; height: number }
+): Promise<HTMLCanvasElement> {
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = reject;
+    img.src = url;
+  });
+
+  URL.revokeObjectURL(url);
+
+  const angleRad = (rotation * Math.PI) / 180;
+  const sin = Math.abs(Math.sin(angleRad));
+  const cos = Math.abs(Math.cos(angleRad));
+
+  const origW = img.naturalWidth;
+  const origH = img.naturalHeight;
+
+  // Max dimension constraint to prevent browser lag on high-res photos
+  const maxDim = 1200;
+  const initialScale = Math.min(1, maxDim / Math.max(origW, origH));
+  const scaledW = Math.round(origW * initialScale);
+  const scaledH = Math.round(origH * initialScale);
+
+  const rotW = Math.round(scaledW * cos + scaledH * sin);
+  const rotH = Math.round(scaledW * sin + scaledH * cos);
+
+  const rotCanvas = document.createElement("canvas");
+  rotCanvas.width = rotW;
+  rotCanvas.height = rotH;
+  const rCtx = rotCanvas.getContext("2d");
+  if (!rCtx) throw new Error("Could not create canvas context");
+
+  rCtx.fillStyle = "#ffffff";
+  rCtx.fillRect(0, 0, rotW, rotH);
+
+  rCtx.translate(rotW / 2, rotH / 2);
+  rCtx.rotate(angleRad);
+  rCtx.drawImage(img, -scaledW / 2, -scaledH / 2, scaledW, scaledH);
+
+  // Calculate crop coordinates
+  const cropX = Math.max(0, Math.round((cropBox.left / 100) * rotW));
+  const cropY = Math.max(0, Math.round((cropBox.top / 100) * rotH));
+  const cropW = Math.max(10, Math.min(rotW - cropX, Math.round((cropBox.width / 100) * rotW)));
+  const cropH = Math.max(10, Math.min(rotH - cropY, Math.round((cropBox.height / 100) * rotH)));
+
+  const outCanvas = document.createElement("canvas");
+  outCanvas.width = cropW;
+  outCanvas.height = cropH;
+  const outCtx = outCanvas.getContext("2d");
+  if (!outCtx) throw new Error("Could not create cropped canvas");
+
+  outCtx.drawImage(rotCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+  return outCanvas;
+}
+
+function getBloodPressureCategory(sys: number, dia: number): { label: string; color: string } {
+  if (sys < 120 && dia < 80) return { label: "ความดันปกติ (Normal)", color: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" };
+  if (sys <= 129 && dia < 80) return { label: "ความดันเริ่มสูง (Elevated)", color: "text-amber-400 border-amber-500/30 bg-amber-500/10" };
+  if (sys <= 139 || (dia >= 80 && dia <= 89)) return { label: "ความดันสูงระดับ 1 (Stage 1 Hypertension)", color: "text-orange-400 border-orange-500/30 bg-orange-500/10" };
+  return { label: "ความดันสูงระดับ 2 (Stage 2 Hypertension)", color: "text-rose-400 border-rose-500/30 bg-rose-500/10" };
+}
+
 function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) => void }) {
   const [selectedSampleId, setSelectedSampleId] = useState(SAMPLE_METERS[0].id);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -100,12 +168,80 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<MeterAnalyzeResult | null>(null);
 
-  // Manual ROI crop controls for blood pressure monitors / LCDs
+  // Manual ROI crop & rotation controls for blood pressure monitors / LCDs
   const [useCrop, setUseCrop] = useState(true);
-  const [cropBox, setCropBox] = useState({ top: 15, left: 10, width: 80, height: 70 });
+  const [cropBox, setCropBox] = useState({ top: 30, left: 35, width: 30, height: 28 });
+  const [rotation, setRotation] = useState<number>(0);
+
+  // Interactive pointer drag box selection
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const selectedSample = SAMPLE_METERS.find((m) => m.id === selectedSampleId)!;
+
+  // Live update the zoomed preview canvas whenever image, rotation, or crop changes
+  useEffect(() => {
+    if (!uploadedFile || !previewCanvasRef.current) return;
+    let active = true;
+
+    getCroppedRotatedCanvas(uploadedFile, rotation, cropBox)
+      .then((canvas) => {
+        if (!active || !previewCanvasRef.current) return;
+        const pCanvas = previewCanvasRef.current;
+        pCanvas.width = 180;
+        pCanvas.height = 180;
+        const ctx = pCanvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, 180, 180);
+        ctx.fillStyle = "#111827";
+        ctx.fillRect(0, 0, 180, 180);
+
+        const scale = Math.min(180 / canvas.width, 180 / canvas.height);
+        const drawW = canvas.width * scale;
+        const drawH = canvas.height * scale;
+        const offsetX = (180 - drawW) / 2;
+        const offsetY = (180 - drawH) / 2;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(canvas, offsetX, offsetY, drawW, drawH);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [uploadedFile, rotation, cropBox]);
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!imageContainerRef.current) return;
+    const rect = imageContainerRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    setDragStart({ x, y });
+    setIsDragging(true);
+    setCropBox({ left: Math.round(x), top: Math.round(y), width: 5, height: 5 });
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!isDragging || !dragStart || !imageContainerRef.current) return;
+    const rect = imageContainerRef.current.getBoundingClientRect();
+    const currentX = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const currentY = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+
+    const left = Math.round(Math.min(dragStart.x, currentX));
+    const top = Math.round(Math.min(dragStart.y, currentY));
+    const width = Math.round(Math.max(5, Math.abs(currentX - dragStart.x)));
+    const height = Math.round(Math.max(5, Math.abs(currentY - dragStart.y)));
+
+    setCropBox({ left, top, width, height });
+  }
+
+  function handlePointerUp() {
+    setIsDragging(false);
+    setDragStart(null);
+  }
 
   async function handleAnalyze() {
     setLoading(true);
@@ -113,33 +249,9 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
     setData(null);
     try {
       if (uploadedFile) {
-        // Auto-downscales high-res mobile photos to prevent freezing
-        const raw = await getImagePixels(uploadedFile, 1200);
-
-        let targetPixels: PixelSource = raw;
-        if (useCrop) {
-          const rect: CropRect = {
-            x: (cropBox.left / 100) * raw.width,
-            y: (cropBox.top / 100) * raw.height,
-            width: (cropBox.width / 100) * raw.width,
-            height: (cropBox.height / 100) * raw.height,
-          };
-          targetPixels = cropPixelSource(raw, rect);
-        }
-
-        // Render targetPixels onto a temporary canvas for high-precision real-device LCD OCR
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = targetPixels.width;
-        tempCanvas.height = targetPixels.height;
-        const ctx = tempCanvas.getContext("2d");
-        if (ctx) {
-          const imgData = ctx.createImageData(targetPixels.width, targetPixels.height);
-          imgData.data.set(targetPixels.data);
-          ctx.putImageData(imgData, 0, 0);
-        }
-
+        const croppedCanvas = await getCroppedRotatedCanvas(uploadedFile, rotation, cropBox);
         const { runDualLcdOcr } = await import("@/lib/meterOcr");
-        const lcdResult = await runDualLcdOcr(tempCanvas);
+        const lcdResult = await runDualLcdOcr(croppedCanvas);
 
         setData({
           witnessA: lcdResult.witnessA,
@@ -221,9 +333,11 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
         </div>
 
         {uploadedFile && (
-          <div className="flex flex-col gap-3 rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+          <div className="flex flex-col gap-4 rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-neutral-300">LCD / Display Region Selector</span>
+              <span className="text-xs font-semibold text-neutral-200">
+                🎯 LCD Alignment & Interactive Region Selector (คลิกลากกรอบบนรูปได้โดยตรง)
+              </span>
               <button
                 onClick={() => setUseCrop(!useCrop)}
                 className={`text-xs px-2.5 py-1 rounded border transition ${
@@ -232,111 +346,181 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
                     : "border-neutral-700 text-neutral-400 hover:text-neutral-200"
                 }`}
               >
-                {useCrop ? "Custom LCD Crop: ON" : "Custom LCD Crop: OFF"}
+                {useCrop ? "Crop Box: ON" : "Crop Box: OFF"}
               </button>
             </div>
 
-            {useCrop && (
-              <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap gap-1.5 text-xs">
-                  <span className="text-neutral-500 py-1">Quick Presets:</span>
+            {/* Quick Presets & Rotation Controls */}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-neutral-500">Presets:</span>
+                <button
+                  onClick={() => {
+                    setCropBox({ top: 30, left: 35, width: 28, height: 26 });
+                    setRotation(0);
+                  }}
+                  className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
+                >
+                  🩺 เครื่องวัดความดัน (Omron)
+                </button>
+                <button
+                  onClick={() => {
+                    setCropBox({ top: 18, left: 39, width: 23, height: 22 });
+                    setRotation(0);
+                  }}
+                  className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
+                >
+                  🩸 เครื่องวัดน้ำตาล (Accu-Chek)
+                </button>
+                <button
+                  onClick={() => setCropBox({ top: 25, left: 25, width: 50, height: 50 })}
+                  className="rounded bg-neutral-800 px-2.5 py-1 text-neutral-300 hover:bg-neutral-700"
+                >
+                  Center LCD
+                </button>
+                <button
+                  onClick={() => {
+                    setCropBox({ top: 0, left: 0, width: 100, height: 100 });
+                    setRotation(0);
+                  }}
+                  className="rounded bg-neutral-800 px-2.5 py-1 text-neutral-400 hover:bg-neutral-700"
+                >
+                  เต็มรูป (Full)
+                </button>
+              </div>
+
+              {/* Rotation & Deskew Controls */}
+              <div className="flex flex-wrap items-center gap-3 rounded border border-neutral-800/80 bg-neutral-950/40 p-2.5 text-xs text-neutral-300">
+                <span className="text-neutral-400 font-medium">หมุนภาพ (Rotate / Deskew):</span>
+                <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => setCropBox({ top: 30, left: 38, width: 26, height: 24 })}
-                    className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
+                    onClick={() => setRotation((r) => (r - 90 + 360) % 360)}
+                    className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 hover:border-cyan-500 hover:text-cyan-300"
+                    title="หมุนซ้าย 90°"
                   >
-                    🎯 เครื่องวัดความดัน (Omron แนวตั้ง)
+                    ↺ -90°
                   </button>
                   <button
-                    onClick={() => setCropBox({ top: 12, left: 38, width: 25, height: 26 })}
-                    className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
+                    onClick={() => setRotation((r) => (r + 90) % 360)}
+                    className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 hover:border-cyan-500 hover:text-cyan-300"
+                    title="หมุนขวา 90°"
                   >
-                    🎯 เครื่องวัดน้ำตาล (Accu-Chek)
+                    ↻ +90°
                   </button>
                   <button
-                    onClick={() => setCropBox({ top: 20, left: 15, width: 70, height: 60 })}
-                    className="rounded bg-neutral-800 px-2 py-1 text-neutral-300 hover:bg-neutral-700"
+                    onClick={() => setRotation((r) => r - 5)}
+                    className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 hover:border-cyan-500 hover:text-cyan-300"
+                    title="เอียงซ้าย 5°"
                   >
-                    Center LCD
+                    ⟲ -5°
                   </button>
                   <button
-                    onClick={() => setCropBox({ top: 0, left: 0, width: 100, height: 100 })}
-                    className="rounded bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-neutral-700"
+                    onClick={() => setRotation((r) => r + 5)}
+                    className="rounded border border-neutral-700 bg-neutral-800 px-2 py-1 hover:border-cyan-500 hover:text-cyan-300"
+                    title="เอียงขวา 5°"
                   >
-                    เต็มรูป (Full)
+                    ⟳ +5°
                   </button>
+                  {rotation !== 0 && (
+                    <button
+                      onClick={() => setRotation(0)}
+                      className="rounded border border-rose-800/40 bg-rose-950/30 px-2 py-1 text-rose-300 hover:bg-rose-900/50"
+                    >
+                      Reset (0°)
+                    </button>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs text-neutral-400 sm:grid-cols-4">
-                  <label className="flex flex-col gap-1">
-                    Top ({cropBox.top}%)
-                    <input
-                      type="range"
-                      min="0"
-                      max="80"
-                      value={cropBox.top}
-                      onChange={(e) => setCropBox({ ...cropBox, top: Number(e.target.value) })}
-                      className="accent-cyan-400"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    Left ({cropBox.left}%)
-                    <input
-                      type="range"
-                      min="0"
-                      max="80"
-                      value={cropBox.left}
-                      onChange={(e) => setCropBox({ ...cropBox, left: Number(e.target.value) })}
-                      className="accent-cyan-400"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    Width ({cropBox.width}%)
-                    <input
-                      type="range"
-                      min="10"
-                      max="100"
-                      value={cropBox.width}
-                      onChange={(e) => setCropBox({ ...cropBox, width: Number(e.target.value) })}
-                      className="accent-cyan-400"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1">
-                    Height ({cropBox.height}%)
-                    <input
-                      type="range"
-                      min="10"
-                      max="100"
-                      value={cropBox.height}
-                      onChange={(e) => setCropBox({ ...cropBox, height: Number(e.target.value) })}
-                      className="accent-cyan-400"
-                    />
-                  </label>
-                </div>
+                <label className="flex items-center gap-2 ml-auto">
+                  <span>มุมเอียง ({rotation}°):</span>
+                  <input
+                    type="range"
+                    min="-45"
+                    max="45"
+                    value={rotation}
+                    onChange={(e) => setRotation(Number(e.target.value))}
+                    className="accent-cyan-400 w-28"
+                  />
+                </label>
               </div>
-            )}
-            <p className="text-xs text-neutral-500">
-              💡 Tip: กดปุ่ม Preset ด้านบน หรือเลื่อนปรับกรอบสีฟ้าให้ครอบ **เฉพาะหน้าจอ LCD ที่มีตัวเลข** (หลีกเลี่ยงลายผ้าปูเตียงหรือปุ่มกด)
+
+              {/* Fine Sliders */}
+              <div className="grid grid-cols-2 gap-3 text-xs text-neutral-400 sm:grid-cols-4">
+                <label className="flex flex-col gap-1">
+                  Top ({cropBox.top}%)
+                  <input
+                    type="range"
+                    min="0"
+                    max="90"
+                    value={cropBox.top}
+                    onChange={(e) => setCropBox({ ...cropBox, top: Number(e.target.value) })}
+                    className="accent-cyan-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Left ({cropBox.left}%)
+                  <input
+                    type="range"
+                    min="0"
+                    max="90"
+                    value={cropBox.left}
+                    onChange={(e) => setCropBox({ ...cropBox, left: Number(e.target.value) })}
+                    className="accent-cyan-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Width ({cropBox.width}%)
+                  <input
+                    type="range"
+                    min="5"
+                    max="100"
+                    value={cropBox.width}
+                    onChange={(e) => setCropBox({ ...cropBox, width: Number(e.target.value) })}
+                    className="accent-cyan-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  Height ({cropBox.height}%)
+                  <input
+                    type="range"
+                    min="5"
+                    max="100"
+                    value={cropBox.height}
+                    onChange={(e) => setCropBox({ ...cropBox, height: Number(e.target.value) })}
+                    className="accent-cyan-400"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-neutral-400">
+              💡 <strong>คำแนะนำ:</strong> ใช้เมาส์<strong>คลิกลากบนรูปด้านล่าง</strong>เพื่อครอบเฉพาะหน้าจอ LCD หรือใช้ปุ่มหมุนภาพให้ตัวเลขตั้งตรงก่อนกด Analyze
             </p>
           </div>
         )}
 
-        <div className="relative flex flex-col md:flex-row items-center justify-center gap-6 rounded-lg border border-neutral-800 bg-black/50 p-6 overflow-hidden">
+        <div className="relative flex flex-col lg:flex-row items-center justify-center gap-6 rounded-lg border border-neutral-800 bg-black/60 p-6 overflow-hidden">
           {uploadedFile ? (
             <>
-              <div className="relative max-h-72">
+              {/* Interactive Image with Drag Box Overlay */}
+              <div
+                ref={imageContainerRef}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+                className="relative max-h-80 cursor-crosshair select-none overflow-hidden rounded border border-neutral-800 shadow-md touch-none"
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={URL.createObjectURL(uploadedFile)}
                   alt="Uploaded display"
-                  className="max-h-72 rounded block"
-                  onLoad={(e) => {
-                    const img = e.currentTarget;
-                    // Auto-sync visual canvas
-                  }}
+                  className="max-h-80 rounded block pointer-events-none transition-transform duration-100"
+                  style={{ transform: `rotate(${rotation}deg)` }}
                 />
                 {useCrop && (
                   <div
-                    className="absolute pointer-events-none border-2 border-cyan-400 bg-cyan-400/15 transition-all rounded shadow-sm shadow-cyan-400/50"
+                    className="absolute pointer-events-none border-2 border-cyan-400 bg-cyan-400/20 rounded shadow-md shadow-cyan-400/40 transition-[top,left,width,height] duration-75"
                     style={{
                       top: `${cropBox.top}%`,
                       left: `${cropBox.left}%`,
@@ -344,35 +528,22 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
                       height: `${cropBox.height}%`,
                     }}
                   >
-                    <span className="absolute -top-5 left-0 rounded bg-cyan-500 px-1 text-[10px] font-mono text-black font-bold whitespace-nowrap">
+                    <span className="absolute -top-5 left-0 rounded bg-cyan-500 px-1.5 py-0.5 text-[10px] font-mono text-black font-bold whitespace-nowrap shadow">
                       LCD Area
                     </span>
                   </div>
                 )}
               </div>
 
+              {/* Exact Zoomed Cropped Preview Canvas */}
               {useCrop && (
-                <div className="flex flex-col items-center gap-2 rounded-lg border border-cyan-800/40 bg-neutral-900/80 p-3 text-center">
-                  <span className="text-[11px] font-medium text-cyan-300">🔍 สิ่งที่ OCR กำลังจะอ่าน (Cropped LCD):</span>
-                  <div
-                    className="relative overflow-hidden rounded border border-neutral-700 bg-black flex items-center justify-center"
-                    style={{ width: "160px", height: "160px" }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={URL.createObjectURL(uploadedFile)}
-                      alt="Zoomed crop"
-                      className="absolute max-w-none pointer-events-none"
-                      style={{
-                        width: `${(100 / Math.max(1, cropBox.width)) * 160}px`,
-                        height: `${(100 / Math.max(1, cropBox.height)) * 160}px`,
-                        top: `-${(cropBox.top / Math.max(1, cropBox.height)) * 160}px`,
-                        left: `-${(cropBox.left / Math.max(1, cropBox.width)) * 160}px`,
-                      }}
-                    />
+                <div className="flex flex-col items-center gap-2 rounded-lg border border-cyan-800/40 bg-neutral-900/90 p-3 text-center">
+                  <span className="text-xs font-semibold text-cyan-300">🔍 สิ่งที่ Local Model กำลังจะอ่าน:</span>
+                  <div className="relative overflow-hidden rounded border border-neutral-700 bg-neutral-950 flex items-center justify-center shadow-inner">
+                    <canvas ref={previewCanvasRef} width={180} height={180} className="block rounded" />
                   </div>
-                  <span className="text-[10px] text-neutral-400">
-                    เลื่อนให้เห็นตัวเลขชัดเจนในช่องนี้ก่อนกด Analyze
+                  <span className="text-[10px] text-neutral-400 max-w-[200px]">
+                    ตรวจสอบให้เห็นตัวเลขชัดเจนในกรอบนี้ และไม่มีขอบผ้าหรือสิ่งรบกวน
                   </span>
                 </div>
               )}
@@ -386,9 +557,9 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
       <button
         onClick={handleAnalyze}
         disabled={loading}
-        className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-medium text-neutral-950 transition hover:bg-cyan-400 disabled:opacity-50"
+        className="rounded-md bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-cyan-400 disabled:opacity-50 shadow-sm"
       >
-        {loading ? "Analyzing dual witnesses..." : "Analyze"}
+        {loading ? "Reading 7-Segment LCD with Local Model..." : "Analyze (Local 7-Segment Model)"}
       </button>
 
       {error && (
@@ -402,32 +573,54 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
             <MeterWitnessCard label={data.witnessB.witness || "Witness B"} reading={data.witnessB} />
           </div>
 
-          <div className={`rounded-lg border p-4 ${STATUS_STYLE[data.result.status]}`}>
-            <p className="text-xs uppercase tracking-wide opacity-70">{data.result.status}</p>
-            <p className="text-2xl font-semibold">{data.result.consensus ?? "unresolved"}</p>
-            <p className="mt-1 text-sm opacity-80">
-              confidence {(data.result.confidence * 100).toFixed(0)}%
-              {data.result.needsHumanReview && " — flagged for human review"}
-            </p>
+          <div className={`rounded-lg border p-5 ${STATUS_STYLE[data.result.status]}`}>
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-wide opacity-70">{data.result.status}</p>
+              <span className="text-xs px-2 py-0.5 rounded bg-black/30 font-mono">
+                confidence {(data.result.confidence * 100).toFixed(0)}%
+              </span>
+            </div>
+            <p className="text-2xl font-bold mt-1">{data.result.consensus ?? "unresolved"}</p>
+            {data.result.needsHumanReview && (
+              <p className="mt-1 text-xs text-amber-300">⚠️ Flagged for human review — ค่าระหว่าง 2 Witness มีความต่าง</p>
+            )}
 
             {/* Blood pressure / multi-row parameter breakdown */}
             {data.extractedLines && data.extractedLines.length >= 2 && (
-              <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="rounded bg-black/20 p-1.5">
-                  <div className="text-neutral-400 font-medium">SYS (บน)</div>
-                  <div className="text-sm font-bold text-white">{data.extractedLines[0] || "—"}</div>
-                  <div className="text-[10px] text-neutral-400">mmHg</div>
+              <div className="mt-4 pt-4 border-t border-white/15 flex flex-col gap-3">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="rounded-lg bg-black/30 p-2.5 border border-white/5">
+                    <div className="text-xs text-neutral-400 font-medium">SYS (ความดันตัวบน)</div>
+                    <div className="text-2xl font-black text-cyan-300">{data.extractedLines[0] || "—"}</div>
+                    <div className="text-[10px] text-neutral-400">mmHg</div>
+                  </div>
+                  <div className="rounded-lg bg-black/30 p-2.5 border border-white/5">
+                    <div className="text-xs text-neutral-400 font-medium">DIA (ความดันตัวล่าง)</div>
+                    <div className="text-2xl font-black text-cyan-300">{data.extractedLines[1] || "—"}</div>
+                    <div className="text-[10px] text-neutral-400">mmHg</div>
+                  </div>
+                  <div className="rounded-lg bg-black/30 p-2.5 border border-white/5">
+                    <div className="text-xs text-neutral-400 font-medium">PULSE (ชีพจร)</div>
+                    <div className="text-2xl font-black text-emerald-300">{data.extractedLines[2] || "—"}</div>
+                    <div className="text-[10px] text-neutral-400">bpm</div>
+                  </div>
                 </div>
-                <div className="rounded bg-black/20 p-1.5">
-                  <div className="text-neutral-400 font-medium">DIA (กลาง)</div>
-                  <div className="text-sm font-bold text-white">{data.extractedLines[1] || "—"}</div>
-                  <div className="text-[10px] text-neutral-400">mmHg</div>
-                </div>
-                <div className="rounded bg-black/20 p-1.5">
-                  <div className="text-neutral-400 font-medium">PULSE (ชีพจร)</div>
-                  <div className="text-sm font-bold text-white">{data.extractedLines[2] || "—"}</div>
-                  <div className="text-[10px] text-neutral-400">bpm</div>
-                </div>
+
+                {/* Medical Blood Pressure Category */}
+                {(() => {
+                  const sys = Number(data.extractedLines[0]);
+                  const dia = Number(data.extractedLines[1]);
+                  if (!isNaN(sys) && !isNaN(dia)) {
+                    const cat = getBloodPressureCategory(sys, dia);
+                    return (
+                      <div className={`flex items-center justify-between rounded border px-3 py-1.5 text-xs ${cat.color}`}>
+                        <span className="font-medium">เกณฑ์ระดับความดันโลหิต (AHA Guideline):</span>
+                        <span className="font-bold">{cat.label}</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )}
           </div>
