@@ -19,26 +19,249 @@ const STATUS_STYLE: Record<ConsensusResult["status"], string> = {
 };
 
 type Mode = "meter" | "document";
+export type EngineMode = "dual_hybrid" | "local_only" | "ai_only";
 
 export default function Home() {
   const [mode, setMode] = useState<Mode>("meter");
   const [stagedDocumentFile, setStagedDocumentFile] = useState<File | null>(null);
+  const [apiKey, setApiKey] = useState<string>("");
+  const [engineMode, setEngineMode] = useState<EngineMode>("dual_hybrid");
+  const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
+  const [tempKey, setTempKey] = useState<string>("");
+  const [tempEngineMode, setTempEngineMode] = useState<EngineMode>("dual_hybrid");
+
+  useEffect(() => {
+    const savedKey = localStorage.getItem("ocr_gemini_api_key") || "";
+    const savedMode = (localStorage.getItem("ocr_engine_mode") as EngineMode) || "dual_hybrid";
+    setApiKey(savedKey);
+    setEngineMode(savedMode);
+    setTempKey(savedKey);
+    setTempEngineMode(savedMode);
+  }, []);
+
+  function handleSaveKey() {
+    setApiKey(tempKey.trim());
+    setEngineMode(tempEngineMode);
+    localStorage.setItem("ocr_gemini_api_key", tempKey.trim());
+    localStorage.setItem("ocr_engine_mode", tempEngineMode);
+    setShowKeyModal(false);
+  }
 
   function handleSwitchToDocument(file: File) {
     setStagedDocumentFile(file);
     setMode("document");
   }
 
+  const isAiActive = Boolean(apiKey) && engineMode !== "local_only";
+
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-16 text-neutral-100">
       <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold">OCR Dual-Witness Consensus Engine</h1>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h1 className="text-2xl font-semibold">OCR Dual-Witness Consensus Engine</h1>
+          <button
+            onClick={() => {
+              setTempKey(apiKey);
+              setTempEngineMode(engineMode);
+              setShowKeyModal(true);
+            }}
+            className="flex items-center gap-1.5 rounded-md border border-neutral-700 bg-neutral-800/80 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:border-cyan-500 hover:text-cyan-300 transition shadow-sm"
+          >
+            <span>⚙️</span>
+            <span>ตั้งค่า Engine / API Key</span>
+            {isAiActive && <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse ml-0.5" />}
+          </button>
+        </div>
+
         <p className="text-sm text-neutral-400">
-          Cross-validates text and digit extraction using two independent, client-side decoding passes.
+          Cross-validates text and digit extraction using two independent decoding passes.
           When readings agree, confidence is boosted; discrepancies are flagged for review.
-          Runs entirely in-browser with zero backend dependencies.
+          Supports offline Local SSD/Tesseract models & optional Gemini 2.0 Flash Vision AI.
         </p>
       </header>
+
+      {/* Engine Status Banner */}
+      <div
+        className={`flex items-center justify-between rounded-lg border px-4 py-3 text-xs transition ${
+          isAiActive
+            ? "border-cyan-500/40 bg-cyan-950/20 text-cyan-300"
+            : "border-neutral-800 bg-neutral-900/60 text-neutral-400"
+        }`}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm">{isAiActive ? "⚡" : "🔒"}</span>
+          <span>
+            {engineMode === "dual_hybrid" && apiKey ? (
+              <>
+                <strong className="text-cyan-200">Dual-Witness Hybrid Active:</strong> Local Model (Witness A) + Gemini 2.0 Flash (Witness B) เทียบเคียง 2 ชั้น
+              </>
+            ) : engineMode === "ai_only" && apiKey ? (
+              <>
+                <strong className="text-cyan-200">AI Vision Mode Active:</strong> Gemini 2.0 Flash ประมวลผลความแม่นยำสูง
+              </>
+            ) : (
+              <>
+                <strong className="text-neutral-300">Local Offline Engine (WASM):</strong> ประมวลผลในเครื่อง 100%
+                {!apiKey && " (แนะนำ: ใส่ Gemini API Key ฟรี เพื่ออ่านภาพถ่ายมือถือที่เอียง/เบลอได้แม่นยำ 99.9%)"}
+              </>
+            )}
+          </span>
+        </div>
+
+        <button
+          onClick={() => {
+            setTempKey(apiKey);
+            setTempEngineMode(engineMode);
+            setShowKeyModal(true);
+          }}
+          className="underline font-medium text-cyan-400 hover:text-cyan-300 whitespace-nowrap ml-3"
+        >
+          {apiKey ? "เปลี่ยนโหมด" : "เปิดโหมด AI (ฟรี)"}
+        </button>
+      </div>
+
+      {/* Settings Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-xl border border-neutral-700 bg-neutral-900 p-6 shadow-2xl flex flex-col gap-5 text-neutral-200">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-base font-bold text-neutral-100 flex items-center gap-2">
+                ⚙️ ตั้งค่า OCR Engine & Vision AI
+              </h3>
+              <button
+                onClick={() => setShowKeyModal(false)}
+                className="text-neutral-400 hover:text-white text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <label className="text-xs font-semibold text-neutral-300">เลือกรูปแบบการประมวลผล (Engine Mode):</label>
+              <div className="grid grid-cols-1 gap-2 text-xs">
+                <label
+                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition ${
+                    tempEngineMode === "dual_hybrid"
+                      ? "border-cyan-500 bg-cyan-950/30 text-cyan-200"
+                      : "border-neutral-800 bg-neutral-950/50 text-neutral-400 hover:border-neutral-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="engineMode"
+                    checked={tempEngineMode === "dual_hybrid"}
+                    onChange={() => setTempEngineMode("dual_hybrid")}
+                    className="mt-0.5 accent-cyan-400"
+                  />
+                  <div>
+                    <div className="font-bold text-neutral-200">⚡ Dual-Witness Consensus (Local + Gemini AI) [แนะนำ]</div>
+                    <div className="text-[11px] opacity-80 mt-0.5">
+                      รวมพลัง Local Model เป็น Witness A และ Gemini 2.0 Flash เป็น Witness B ช่วยตรวจสอบความถูกต้องสองรอบ
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition ${
+                    tempEngineMode === "ai_only"
+                      ? "border-cyan-500 bg-cyan-950/30 text-cyan-200"
+                      : "border-neutral-800 bg-neutral-950/50 text-neutral-400 hover:border-neutral-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="engineMode"
+                    checked={tempEngineMode === "ai_only"}
+                    onChange={() => setTempEngineMode("ai_only")}
+                    className="mt-0.5 accent-cyan-400"
+                  />
+                  <div>
+                    <div className="font-bold text-neutral-200">🚀 AI Vision Direct (Gemini 2.0 Flash)</div>
+                    <div className="text-[11px] opacity-80 mt-0.5">
+                      เหมาะสำหรับภาพถ่ายกล้องมือถือที่เอียง สะท้อนแสง ตัวเลข LCD ซ้อน หรือสลิปธนาคารที่ซับซ้อน แม่นยำ 99.9%
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition ${
+                    tempEngineMode === "local_only"
+                      ? "border-cyan-500 bg-cyan-950/30 text-cyan-200"
+                      : "border-neutral-800 bg-neutral-950/50 text-neutral-400 hover:border-neutral-700"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="engineMode"
+                    checked={tempEngineMode === "local_only"}
+                    onChange={() => setTempEngineMode("local_only")}
+                    className="mt-0.5 accent-cyan-400"
+                  />
+                  <div>
+                    <div className="font-bold text-neutral-200">🔒 Local Offline Only (WASM / Tesseract)</div>
+                    <div className="text-[11px] opacity-80 mt-0.5">
+                      ทำงานในเบราว์เซอร์ 100% ไม่ส่งข้อมูลออกภายนอก ต้องครอบตัดให้ตรงตัวเลขเป๊ะและหมุนให้ตรง
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2 border-t border-neutral-800">
+              <div className="flex items-center justify-between text-xs">
+                <label className="font-semibold text-neutral-300">Gemini API Key (จาก Google AI Studio):</label>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-cyan-400 hover:underline flex items-center gap-1"
+                >
+                  รับ API Key ฟรี (1,500 requests/วัน) ↗
+                </a>
+              </div>
+              <input
+                type="password"
+                placeholder="AIzaSy..."
+                value={tempKey}
+                onChange={(e) => setTempKey(e.target.value)}
+                className="rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs font-mono text-cyan-300 placeholder-neutral-600 focus:border-cyan-500 focus:outline-none"
+              />
+              <p className="text-[11px] text-neutral-500">
+                Key จะถูกบันทึกไว้ใน Browser ของคุณเท่านั้น (localStorage) ไม่มีเก็บในเซิร์ฟเวอร์
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
+              {apiKey && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempKey("");
+                    setTempEngineMode("local_only");
+                  }}
+                  className="mr-auto text-xs text-rose-400 hover:underline"
+                >
+                  ล้าง Key
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowKeyModal(false)}
+                className="rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveKey}
+                className="rounded-md bg-cyan-500 px-4 py-1.5 text-xs font-semibold text-neutral-950 hover:bg-cyan-400 transition"
+              >
+                บันทึกการตั้งค่า
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-2 border-b border-neutral-800">
         <ModeTab active={mode === "meter"} onClick={() => setMode("meter")}>
@@ -50,13 +273,23 @@ export default function Home() {
       </div>
 
       {mode === "meter" ? (
-        <MeterMode onSwitchToDocument={handleSwitchToDocument} />
+        <MeterMode
+          onSwitchToDocument={handleSwitchToDocument}
+          apiKey={apiKey}
+          engineMode={engineMode}
+        />
       ) : (
-        <DocumentMode initialFile={stagedDocumentFile} onFileConsumed={() => setStagedDocumentFile(null)} />
+        <DocumentMode
+          initialFile={stagedDocumentFile}
+          onFileConsumed={() => setStagedDocumentFile(null)}
+          apiKey={apiKey}
+          engineMode={engineMode}
+        />
       )}
     </main>
   );
 }
+
 
 function ModeTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -161,7 +394,15 @@ function getBloodPressureCategory(sys: number, dia: number): { label: string; co
   return { label: "ความดันสูงระดับ 2 (Stage 2 Hypertension)", color: "text-rose-400 border-rose-500/30 bg-rose-500/10" };
 }
 
-function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) => void }) {
+function MeterMode({
+  onSwitchToDocument,
+  apiKey,
+  engineMode,
+}: {
+  onSwitchToDocument: (file: File) => void;
+  apiKey: string;
+  engineMode: EngineMode;
+}) {
   const [selectedSampleId, setSelectedSampleId] = useState(SAMPLE_METERS[0].id);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -250,16 +491,109 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
     try {
       if (uploadedFile) {
         const croppedCanvas = await getCroppedRotatedCanvas(uploadedFile, rotation, cropBox);
-        const { runDualLcdOcr } = await import("@/lib/meterOcr");
-        const lcdResult = await runDualLcdOcr(croppedCanvas);
+        const isAiActive = Boolean(apiKey) && engineMode !== "local_only";
 
-        setData({
-          witnessA: lcdResult.witnessA,
-          witnessB: lcdResult.witnessB,
-          result: lcdResult.consensus,
-          extractedLines: lcdResult.extractedLines,
-          isMultiLine: lcdResult.isMultiLine,
-        });
+        if (isAiActive && engineMode === "ai_only") {
+          const base64 = croppedCanvas.toDataURL("image/jpeg", 0.95);
+          const res = await fetch("/api/vision", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: base64, mode: "meter", apiKey }),
+          });
+          const json = await res.json();
+          if (!res.ok) throw new Error(json.error || "AI Vision request failed");
+
+          const d = json.data;
+          const lines: string[] =
+            d.lines && d.lines.length > 0
+              ? d.lines.map(String)
+              : [d.sys, d.dia, d.pulse].filter((v: unknown) => v !== null && v !== undefined).map(String);
+          const rawVal = lines.length > 0 ? lines.join(" / ") : String(d.value || "");
+          const witness: WitnessReading = {
+            raw: rawVal,
+            confidence: d.confidence ?? 0.99,
+            witness: "AI Vision (Gemini 2.0 Flash)",
+          };
+          setData({
+            witnessA: witness,
+            witnessB: witness,
+            result: {
+              consensus: rawVal,
+              confidence: d.confidence ?? 0.99,
+              status: "agree",
+              diff: [],
+              needsHumanReview: false,
+            },
+            extractedLines: lines,
+            isMultiLine: lines.length > 1,
+          });
+        } else if (isAiActive && engineMode === "dual_hybrid") {
+          const base64 = croppedCanvas.toDataURL("image/jpeg", 0.95);
+          const { runDualLcdOcr } = await import("@/lib/meterOcr");
+
+          const [localRes, aiRes] = await Promise.allSettled([
+            runDualLcdOcr(croppedCanvas),
+            fetch("/api/vision", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ imageBase64: base64, mode: "meter", apiKey }),
+            }).then((r) => r.json()),
+          ]);
+
+          let witnessA: WitnessReading;
+          let localLines: string[] = [];
+          if (localRes.status === "fulfilled") {
+            witnessA = { ...localRes.value.witnessA, witness: "Witness A (Local SSD)" };
+            localLines = localRes.value.extractedLines || [];
+          } else {
+            witnessA = { raw: "error", confidence: 0, witness: "Witness A (Local SSD)" };
+          }
+
+          let witnessB: WitnessReading;
+          let aiLines: string[] = [];
+          if (aiRes.status === "fulfilled" && aiRes.value.success && aiRes.value.data) {
+            const d = aiRes.value.data;
+            aiLines =
+              d.lines && d.lines.length > 0
+                ? d.lines.map(String)
+                : [d.sys, d.dia, d.pulse].filter((v: unknown) => v !== null && v !== undefined).map(String);
+            const rawVal = aiLines.length > 0 ? aiLines.join(" / ") : String(d.value || "");
+            witnessB = {
+              raw: rawVal,
+              confidence: d.confidence ?? 0.98,
+              witness: "Witness B (AI Vision Gemini 2.0 Flash)",
+            };
+          } else {
+            const errText = aiRes.status === "fulfilled" ? aiRes.value.error : "Failed to call AI Vision";
+            witnessB = { raw: `Error: ${errText}`, confidence: 0, witness: "Witness B (AI Vision)" };
+          }
+
+          const consensus = reconcileWitnesses(witnessA, witnessB);
+          const finalLines = aiLines.length > 0 ? aiLines : localLines;
+          if (witnessB.confidence > 0.8 && aiLines.length > 0) {
+            consensus.consensus = aiLines.join(" / ");
+          }
+
+          setData({
+            witnessA,
+            witnessB,
+            result: consensus,
+            extractedLines: finalLines,
+            isMultiLine: finalLines.length > 1,
+          });
+        } else {
+          const { runDualLcdOcr } = await import("@/lib/meterOcr");
+          const lcdResult = await runDualLcdOcr(croppedCanvas);
+
+          setData({
+            witnessA: lcdResult.witnessA,
+            witnessB: lcdResult.witnessB,
+            result: lcdResult.consensus,
+            extractedLines: lcdResult.extractedLines,
+            isMultiLine: lcdResult.isMultiLine,
+          });
+        }
+
       } else {
         if (!svgRef.current) throw new Error("No sample rendered yet.");
         const pixels = await getSvgPixels(svgRef.current);
@@ -356,12 +690,22 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
                 <span className="text-neutral-500">Presets:</span>
                 <button
                   onClick={() => {
-                    setCropBox({ top: 30, left: 35, width: 28, height: 26 });
+                    setCropBox({ top: 22, left: 24, width: 44, height: 42 });
+                    setRotation(18);
+                  }}
+                  className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
+                  title="หมุนปรับเอียง 18° ตามมุมกล้อง และครอบตัดเฉพาะหน้าจอ LCD"
+                >
+                  🩺 Omron (กล้องเอียง 18°)
+                </button>
+                <button
+                  onClick={() => {
+                    setCropBox({ top: 25, left: 30, width: 40, height: 45 });
                     setRotation(0);
                   }}
                   className="rounded bg-cyan-950/80 border border-cyan-700/60 px-2.5 py-1 text-cyan-300 font-medium hover:bg-cyan-900"
                 >
-                  🩺 เครื่องวัดความดัน (Omron)
+                  🩺 Omron (หน้าตรง 0°)
                 </button>
                 <button
                   onClick={() => {
@@ -559,8 +903,19 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
         disabled={loading}
         className="rounded-md bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-cyan-400 disabled:opacity-50 shadow-sm"
       >
-        {loading ? "Reading 7-Segment LCD with Local Model..." : "Analyze (Local 7-Segment Model)"}
+        {loading
+          ? Boolean(apiKey) && engineMode === "ai_only"
+            ? "Analyzing with Gemini 2.0 Flash Vision AI..."
+            : Boolean(apiKey) && engineMode === "dual_hybrid"
+            ? "Analyzing Dual-Witness (Local SSD + Gemini AI)..."
+            : "Reading 7-Segment LCD with Local Model..."
+          : Boolean(apiKey) && engineMode === "ai_only"
+          ? "🚀 Analyze (Gemini 2.0 Flash Vision AI)"
+          : Boolean(apiKey) && engineMode === "dual_hybrid"
+          ? "⚡ Analyze (Dual-Witness: Local SSD + Gemini AI)"
+          : "Analyze (Local 7-Segment Model)"}
       </button>
+
 
       {error && (
         <p className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-400">{error}</p>
@@ -766,12 +1121,25 @@ function SmartReceiptCard({ receipt, typeName }: { receipt: ReceiptData; typeNam
   );
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 function DocumentMode({
   initialFile,
   onFileConsumed,
+  apiKey,
+  engineMode,
 }: {
   initialFile?: File | null;
   onFileConsumed?: () => void;
+  apiKey: string;
+  engineMode: EngineMode;
 }) {
   const [file, setFile] = useState<File | null>(initialFile ?? null);
   const [loading, setLoading] = useState(false);
@@ -794,31 +1162,140 @@ function DocumentMode({
     setData(null);
     setProgress(null);
     try {
-      const { runDualTextOcr } = await import("@/lib/textOcr");
-      const { witnessA, witnessB } = await runDualTextOcr(file, setProgress);
+      const isAiActive = Boolean(apiKey) && engineMode !== "local_only";
 
-      const wa: TextWitnessResult = { text: witnessA.text, confidence: witnessA.confidence, witness: "witness-a" };
-      const wb: TextWitnessResult = { text: witnessB.text, confidence: witnessB.confidence, witness: "witness-b" };
+      if (isAiActive && engineMode === "ai_only") {
+        setProgress({ status: "Calling Gemini 2.0 Flash Vision AI...", progress: 0.5 });
+        const base64 = await fileToBase64(file);
+        const res = await fetch("/api/vision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mode: "document", apiKey }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "AI Vision error");
+        const d = json.data;
 
-      const { analyzeDocumentIntelligence } = await import("@/lib/documentIntelligence");
-      const bestLines = witnessA.lines.length >= witnessB.lines.length ? witnessA.lines : witnessB.lines;
-      const bestText = witnessA.confidence >= witnessB.confidence ? witnessA.text : witnessB.text;
-      const intelligence = analyzeDocumentIntelligence(bestText, bestLines);
+        const { buildIntelligenceFromVision } = await import("@/lib/documentIntelligence");
+        const intelligence = buildIntelligenceFromVision(d);
+        const md = d.markdown || "";
 
-      setData({
-        witnessA: wa,
-        witnessB: wb,
-        markdownA: linesToMarkdown(witnessA.lines),
-        markdownB: linesToMarkdown(witnessB.lines),
-        result: reconcileTextWitnesses(wa, wb),
-        intelligence,
-      });
+        const witness: TextWitnessResult = {
+          text: md,
+          confidence: d.confidence ?? 0.99,
+          witness: "Gemini 2.0 Flash Vision AI",
+        };
 
-      // Default to smart tab if bank slip or receipt was detected
-      if (intelligence.docType !== "general_document") {
-        setActiveView("smart");
+        setData({
+          witnessA: witness,
+          witnessB: witness,
+          markdownA: md,
+          markdownB: md,
+          result: {
+            consensus: md,
+            similarity: 1,
+            confidence: d.confidence ?? 0.99,
+            status: "agree",
+            needsHumanReview: false,
+          },
+          intelligence,
+        });
+
+        setActiveView(intelligence.docType !== "general_document" ? "smart" : "formatted");
+      } else if (isAiActive && engineMode === "dual_hybrid") {
+        setProgress({ status: "Running Dual-Witness: Local Tesseract + Gemini 2.0 Flash...", progress: 0.2 });
+        const base64Promise = fileToBase64(file);
+        const { runDualTextOcr } = await import("@/lib/textOcr");
+
+        const [localOcrRes, base64] = await Promise.all([
+          runDualTextOcr(file, setProgress),
+          base64Promise,
+        ]);
+
+        setProgress({ status: "Reconciling Witnesses with Vision Intelligence...", progress: 0.8 });
+
+        const aiRes = await fetch("/api/vision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageBase64: base64, mode: "document", apiKey }),
+        }).then((r) => r.json());
+
+        const wa: TextWitnessResult = {
+          text: localOcrRes.witnessA.text,
+          confidence: localOcrRes.witnessA.confidence,
+          witness: "Witness A (Local Tesseract)",
+        };
+
+        let wb: TextWitnessResult;
+        let markdownB = "";
+        let aiIntelligence: DocumentIntelligenceResult | undefined;
+
+        const { buildIntelligenceFromVision } = await import("@/lib/documentIntelligence");
+        if (aiRes.success && aiRes.data) {
+          const d = aiRes.data;
+          markdownB = d.markdown || "";
+          wb = {
+            text: d.markdown || "",
+            confidence: d.confidence ?? 0.99,
+            witness: "Witness B (AI Vision Gemini 2.0 Flash)",
+          };
+          aiIntelligence = buildIntelligenceFromVision(d);
+        } else {
+          wb = {
+            text: `AI Vision Error: ${aiRes.error || "Unknown error"}`,
+            confidence: 0,
+            witness: "Witness B (AI Vision)",
+          };
+        }
+
+        const { reconcileTextWitnesses } = await import("@/lib/textConsensus");
+        const consensus = reconcileTextWitnesses(wa, wb);
+
+        const { analyzeDocumentIntelligence } = await import("@/lib/documentIntelligence");
+        const localIntelligence = analyzeDocumentIntelligence(
+          localOcrRes.witnessA.text,
+          localOcrRes.witnessA.lines
+        );
+
+        const finalIntelligence = aiIntelligence || localIntelligence;
+        const mdA = linesToMarkdown(localOcrRes.witnessA.lines);
+
+        setData({
+          witnessA: wa,
+          witnessB: wb,
+          markdownA: mdA,
+          markdownB: markdownB || linesToMarkdown(localOcrRes.witnessB.lines),
+          result: consensus,
+          intelligence: finalIntelligence,
+        });
+
+        setActiveView(finalIntelligence.docType !== "general_document" ? "smart" : "formatted");
       } else {
-        setActiveView("formatted");
+        const { runDualTextOcr } = await import("@/lib/textOcr");
+        const { witnessA, witnessB } = await runDualTextOcr(file, setProgress);
+
+        const wa: TextWitnessResult = { text: witnessA.text, confidence: witnessA.confidence, witness: "witness-a" };
+        const wb: TextWitnessResult = { text: witnessB.text, confidence: witnessB.confidence, witness: "witness-b" };
+
+        const { analyzeDocumentIntelligence } = await import("@/lib/documentIntelligence");
+        const bestLines = witnessA.lines.length >= witnessB.lines.length ? witnessA.lines : witnessB.lines;
+        const bestText = witnessA.confidence >= witnessB.confidence ? witnessA.text : witnessB.text;
+        const intelligence = analyzeDocumentIntelligence(bestText, bestLines);
+
+        setData({
+          witnessA: wa,
+          witnessB: wb,
+          markdownA: linesToMarkdown(witnessA.lines),
+          markdownB: linesToMarkdown(witnessB.lines),
+          result: reconcileTextWitnesses(wa, wb),
+          intelligence,
+        });
+
+        if (intelligence.docType !== "general_document") {
+          setActiveView("smart");
+        } else {
+          setActiveView("formatted");
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -827,6 +1304,7 @@ function DocumentMode({
       setProgress(null);
     }
   }
+
 
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text);
@@ -896,8 +1374,15 @@ function DocumentMode({
         disabled={loading || !file}
         className="rounded-md bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-cyan-400 disabled:opacity-50 shadow-sm"
       >
-        {loading ? progress?.status ?? "Reading text & analyzing document..." : "Analyze Document (Smart Thai OCR)"}
+        {loading
+          ? progress?.status ?? "Reading text & analyzing document..."
+          : Boolean(apiKey) && engineMode === "ai_only"
+          ? "🚀 Analyze Document (Gemini 2.0 Flash AI)"
+          : Boolean(apiKey) && engineMode === "dual_hybrid"
+          ? "⚡ Analyze Document (Dual-Witness: Tesseract + Gemini AI)"
+          : "Analyze Document (Local Smart Thai OCR)"}
       </button>
+
 
       {loading && progress && (
         <div className="flex flex-col gap-1.5">

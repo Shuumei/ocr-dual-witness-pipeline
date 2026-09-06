@@ -385,3 +385,105 @@ export function analyzeDocumentIntelligence(rawText: string, lines: OcrLine[] = 
     keyInsights,
   };
 }
+
+export function matchThaiBank(text: string): BankInfo | undefined {
+  const lower = text.toLowerCase();
+  for (const entry of KNOWN_BANKS) {
+    if (entry.keywords.some((kw) => lower.includes(kw.toLowerCase()))) {
+      return entry.bank;
+    }
+  }
+  return undefined;
+}
+
+export interface VisionDocumentData {
+  docType?: DocumentType;
+  bankName?: string | null;
+  amount?: number | null;
+  amountFormatted?: string | null;
+  senderName?: string | null;
+  receiverName?: string | null;
+  dateTime?: string | null;
+  referenceNo?: string | null;
+  merchantName?: string | null;
+  taxId?: string | null;
+  total?: number | null;
+  vat?: number | null;
+  items?: Array<{ name: string; price: number }>;
+  markdown?: string;
+  confidence?: number;
+}
+
+export function buildIntelligenceFromVision(d: VisionDocumentData): DocumentIntelligenceResult {
+  const docType: DocumentType =
+    d.docType && ["bank_slip", "receipt_invoice", "general_document"].includes(d.docType)
+      ? d.docType
+      : d.bankName || d.amountFormatted
+      ? "bank_slip"
+      : d.taxId || d.merchantName
+      ? "receipt_invoice"
+      : "general_document";
+
+  let bankSlip: BankSlipData | undefined = undefined;
+  if (docType === "bank_slip" || d.bankName || d.amountFormatted) {
+    const bank = d.bankName ? matchThaiBank(d.bankName) : undefined;
+    const amt = d.amount ? Number(d.amount) : undefined;
+    bankSlip = {
+      bank,
+      amount: amt,
+      amountFormatted:
+        d.amountFormatted ||
+        (amt ? `${amt.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท` : undefined),
+      senderName: d.senderName || undefined,
+      receiverName: d.receiverName || undefined,
+      dateTime: d.dateTime || undefined,
+      referenceNo: d.referenceNo || undefined,
+      isSuccessful: true,
+    };
+  }
+
+  let receipt: ReceiptData | undefined = undefined;
+  if (docType === "receipt_invoice" || d.merchantName || d.total) {
+    const tot = d.total ? Number(d.total) : undefined;
+    const v = d.vat ? Number(d.vat) : undefined;
+    receipt = {
+      merchantName: d.merchantName || undefined,
+      taxId: d.taxId || undefined,
+      total: tot,
+      totalFormatted: tot ? `${tot.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท` : undefined,
+      vat: v,
+      vatFormatted: v ? `${v.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท` : undefined,
+      lineItems: (d.items || []).map((i) => ({ description: i.name, price: i.price })),
+    };
+  }
+
+  let extractedMarkdownTable: string | undefined = undefined;
+  if (d.items && d.items.length > 0) {
+    extractedMarkdownTable = [
+      "| รายการสินค้า / บริการ | ราคา (บาท) |",
+      "|:---|---:|",
+      ...d.items.map((i) => `| ${i.name} | ${i.price.toLocaleString("th-TH", { minimumFractionDigits: 2 })} |`),
+    ].join("\n");
+  }
+
+  const typeNameTh =
+    docType === "bank_slip"
+      ? `สลิปโอนเงิน (${bankSlip?.bank?.name || d.bankName || "ธนาคาร"})`
+      : docType === "receipt_invoice"
+      ? `ใบเสร็จ / ใบกำกับภาษี (${receipt?.merchantName || d.merchantName || "ร้านค้า"})`
+      : "เอกสารทั่วไป (General Document)";
+
+  return {
+    docType,
+    typeNameTh,
+    confidence: d.confidence ?? 0.98,
+    bankSlip,
+    receipt,
+    extractedMarkdownTable,
+    keyInsights: [
+      `ตรวจพบ: ${typeNameTh}`,
+      "วิเคราะห์ด้วย AI Vision (Google Gemini 2.0 Flash)",
+    ],
+  };
+}
+

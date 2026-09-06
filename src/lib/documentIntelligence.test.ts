@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { analyzeDocumentIntelligence } from "./documentIntelligence";
+import { analyzeDocumentIntelligence, buildIntelligenceFromVision } from "./documentIntelligence";
 
 describe("documentIntelligence", () => {
   it("classifies KBank transfer slip and extracts financial entities", () => {
@@ -79,4 +79,24 @@ describe("documentIntelligence", () => {
     expect(result.docType).toBe("general_document");
     expect(result.bankSlip).toBeUndefined();
   });
+
+  it("builds intelligence from AI vision data", () => {
+    const aiData = {
+      docType: "bank_slip" as const,
+      bankName: "กสิกรไทย",
+      amount: 500,
+      amountFormatted: "500.00 บาท",
+      senderName: "สมชาย",
+      receiverName: "สมหวัง",
+      dateTime: "06/09/2026 10:00",
+      referenceNo: "REF123456",
+      confidence: 0.99,
+    };
+    const result = buildIntelligenceFromVision(aiData);
+    expect(result.docType).toBe("bank_slip");
+    expect(result.bankSlip?.bank?.code).toBe("KBANK");
+    expect(result.bankSlip?.amount).toBe(500);
+    expect(result.bankSlip?.referenceNo).toBe("REF123456");
+  });
 });
+
