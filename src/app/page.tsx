@@ -662,12 +662,108 @@ function MeterWitnessCard({ label, reading }: { label: string; reading: WitnessR
 /* Mode 2: general document / UI OCR, output as Markdown                  */
 /* ---------------------------------------------------------------------- */
 
+import type { DocumentIntelligenceResult, BankSlipData, ReceiptData } from "@/lib/documentIntelligence";
+
 interface DocumentAnalyzeResult {
   witnessA: TextWitnessResult;
   witnessB: TextWitnessResult;
   markdownA: string;
   markdownB: string;
   result: TextConsensusResult;
+  intelligence?: DocumentIntelligenceResult;
+}
+
+function SmartSlipCard({ slip, typeName }: { slip: BankSlipData; typeName: string }) {
+  const bank = slip.bank;
+  return (
+    <div
+      className={`rounded-xl border p-5 shadow-lg flex flex-col gap-4 ${
+        bank?.badgeBg || "bg-neutral-900/90"
+      } ${bank?.borderColor || "border-neutral-800"}`}
+    >
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-3.5 h-3.5 rounded-full shadow" style={{ backgroundColor: bank?.brandColor || "#06b6d4" }} />
+          <span className={`text-sm font-bold tracking-wide ${bank?.textColor || "text-cyan-300"}`}>
+            {bank?.name || typeName}
+          </span>
+        </div>
+        {slip.isSuccessful && (
+          <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-medium">
+            ✓ โอนเงินสำเร็จ
+          </span>
+        )}
+      </div>
+
+      {slip.amountFormatted && (
+        <div className="text-center py-2 bg-black/20 rounded-lg border border-white/5">
+          <div className="text-xs text-neutral-400 font-medium">จำนวนเงินโอน</div>
+          <div className="text-3xl sm:text-4xl font-black text-white tracking-tight mt-0.5">
+            {slip.amountFormatted}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-black/30 rounded-lg p-3 border border-white/5 text-xs">
+        <div className="flex flex-col gap-1">
+          <span className="text-neutral-400 font-medium">จาก (ผู้โอน):</span>
+          <span className="font-semibold text-neutral-200">{slip.senderName || "—"}</span>
+          {slip.senderAccount && <span className="font-mono text-neutral-400">{slip.senderAccount}</span>}
+        </div>
+        <div className="flex flex-col gap-1 sm:border-l sm:border-white/10 sm:pl-3">
+          <span className="text-neutral-400 font-medium">ไปยัง (ผู้รับเงิน):</span>
+          <span className="font-semibold text-neutral-200">{slip.receiverName || "—"}</span>
+          {slip.receiverAccount && <span className="font-mono text-neutral-400">{slip.receiverAccount}</span>}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between text-xs text-neutral-400 pt-1 gap-2">
+        {slip.dateTime && (
+          <span>
+            วันเวลา: <strong className="text-neutral-200">{slip.dateTime}</strong>
+          </span>
+        )}
+        {slip.referenceNo && (
+          <span>
+            เลขอ้างอิง: <strong className="font-mono text-cyan-300">{slip.referenceNo}</strong>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SmartReceiptCard({ receipt, typeName }: { receipt: ReceiptData; typeName: string }) {
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-5 shadow-lg flex flex-col gap-4">
+      <div className="flex items-center justify-between border-b border-amber-500/20 pb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-base">🧾</span>
+          <span className="text-sm font-bold text-amber-300">{receipt.merchantName || typeName}</span>
+        </div>
+        {receipt.taxId && (
+          <span className="text-xs px-2 py-0.5 rounded bg-neutral-900 border border-neutral-700 text-neutral-300 font-mono">
+            Tax ID: {receipt.taxId}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-center">
+        {receipt.totalFormatted && (
+          <div className="bg-black/30 rounded-lg p-3 border border-white/5">
+            <div className="text-xs text-neutral-400 font-medium">ยอดรวมสุทธิ (Total)</div>
+            <div className="text-2xl font-black text-amber-300 mt-0.5">{receipt.totalFormatted}</div>
+          </div>
+        )}
+        {receipt.vatFormatted && (
+          <div className="bg-black/30 rounded-lg p-3 border border-white/5">
+            <div className="text-xs text-neutral-400 font-medium">ภาษีมูลค่าเพิ่ม (VAT 7%)</div>
+            <div className="text-2xl font-black text-neutral-200 mt-0.5">{receipt.vatFormatted}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function DocumentMode({
@@ -682,7 +778,7 @@ function DocumentMode({
   const [progress, setProgress] = useState<OcrProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DocumentAnalyzeResult | null>(null);
-  const [activeView, setActiveView] = useState<"formatted" | "raw">("formatted");
+  const [activeView, setActiveView] = useState<"smart" | "formatted" | "json">("smart");
   const [copied, setCopied] = useState(false);
 
   // Sync if initialFile was passed from switch button
@@ -704,13 +800,26 @@ function DocumentMode({
       const wa: TextWitnessResult = { text: witnessA.text, confidence: witnessA.confidence, witness: "witness-a" };
       const wb: TextWitnessResult = { text: witnessB.text, confidence: witnessB.confidence, witness: "witness-b" };
 
+      const { analyzeDocumentIntelligence } = await import("@/lib/documentIntelligence");
+      const bestLines = witnessA.lines.length >= witnessB.lines.length ? witnessA.lines : witnessB.lines;
+      const bestText = witnessA.confidence >= witnessB.confidence ? witnessA.text : witnessB.text;
+      const intelligence = analyzeDocumentIntelligence(bestText, bestLines);
+
       setData({
         witnessA: wa,
         witnessB: wb,
         markdownA: linesToMarkdown(witnessA.lines),
         markdownB: linesToMarkdown(witnessB.lines),
         result: reconcileTextWitnesses(wa, wb),
+        intelligence,
       });
+
+      // Default to smart tab if bank slip or receipt was detected
+      if (intelligence.docType !== "general_document") {
+        setActiveView("smart");
+      } else {
+        setActiveView("formatted");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -749,18 +858,17 @@ function DocumentMode({
         <div className="flex flex-col gap-2 px-3">
           <p>
             Runs <a className="underline text-cyan-400" href="https://github.com/naptha/tesseract.js">Tesseract.js</a> (WebAssembly)
-            twice using distinct page segmentation modes (PSM): AUTO (automatic block layout analysis) and SPARSE_TEXT
-            (scattered text detection).
+            twice using distinct page segmentation modes (PSM): AUTO and SPARSE_TEXT.
           </p>
           <p>
-            Includes a dedicated **Thai OCR Normalizer** that cleans floating vowels (สระลอย), displaced tone marks (วรรณยุกต์หลุด),
-            and broken word spacings (e.g. slips, invoices, receipts).
+            Equipped with <strong>Smart Document Intelligence</strong>: automatically identifies Thai bank slips, receipts, and invoices,
+            extracts financial entities (amount, accounts, ref numbers, taxes), formats tables, and cleans all Thai floating vowels and tone marks.
           </p>
         </div>
       </details>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-neutral-300">1. Upload an image (Documents, Slips, UI)</h2>
+        <h2 className="text-sm font-medium text-neutral-300">1. Upload an image (Bank Slips, Receipts, Documents, UI)</h2>
         <label className="w-fit cursor-pointer rounded-md border border-neutral-700 px-3 py-1.5 text-sm text-neutral-400 transition hover:border-neutral-500">
           {file ? file.name : "Choose an image"}
           <input
@@ -786,9 +894,9 @@ function DocumentMode({
       <button
         onClick={handleAnalyze}
         disabled={loading || !file}
-        className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-medium text-neutral-950 transition hover:bg-cyan-400 disabled:opacity-50"
+        className="rounded-md bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-cyan-400 disabled:opacity-50 shadow-sm"
       >
-        {loading ? progress?.status ?? "Reading text..." : "Analyze Document"}
+        {loading ? progress?.status ?? "Reading text & analyzing document..." : "Analyze Document (Smart Thai OCR)"}
       </button>
 
       {loading && progress && (
@@ -818,7 +926,14 @@ function DocumentMode({
           </div>
 
           <div className={`rounded-lg border p-4 ${STATUS_STYLE[data.result.status]}`}>
-            <p className="text-xs uppercase tracking-wide opacity-70">{data.result.status}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-wide opacity-70">{data.result.status}</p>
+              {data.intelligence && (
+                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-black/40 text-cyan-300">
+                  {data.intelligence.typeNameTh}
+                </span>
+              )}
+            </div>
             <p className="mt-1 text-sm opacity-80">
               similarity {(data.result.similarity * 100).toFixed(0)}% · confidence{" "}
               {(data.result.confidence * 100).toFixed(0)}%
@@ -827,37 +942,53 @@ function DocumentMode({
           </div>
 
           {resolvedMarkdown !== null ? (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
-                <div className="flex gap-2">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-2 flex-wrap gap-2">
+                <div className="flex gap-1.5">
                   <button
-                    onClick={() => setActiveView("formatted")}
-                    className={`text-xs px-3 py-1 rounded transition ${
-                      activeView === "formatted"
-                        ? "bg-cyan-500/20 text-cyan-300 font-medium"
+                    onClick={() => setActiveView("smart")}
+                    className={`text-xs px-3 py-1.5 rounded transition ${
+                      activeView === "smart"
+                        ? "bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30"
                         : "text-neutral-400 hover:text-neutral-200"
                     }`}
                   >
-                    ✨ Formatted Preview
+                    ✨ สรุปข้อมูลอัจฉริยะ (Smart Card)
                   </button>
                   <button
-                    onClick={() => setActiveView("raw")}
-                    className={`text-xs px-3 py-1 rounded transition ${
-                      activeView === "raw"
-                        ? "bg-cyan-500/20 text-cyan-300 font-medium"
+                    onClick={() => setActiveView("formatted")}
+                    className={`text-xs px-3 py-1.5 rounded transition ${
+                      activeView === "formatted"
+                        ? "bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30"
                         : "text-neutral-400 hover:text-neutral-200"
                     }`}
                   >
-                    Raw Markdown
+                    📝 รูปแบบเอกสาร (Markdown)
+                  </button>
+                  <button
+                    onClick={() => setActiveView("json")}
+                    className={`text-xs px-3 py-1.5 rounded transition ${
+                      activeView === "json"
+                        ? "bg-cyan-500/20 text-cyan-300 font-semibold border border-cyan-500/30"
+                        : "text-neutral-400 hover:text-neutral-200"
+                    }`}
+                  >
+                    📊 ข้อมูล JSON
                   </button>
                 </div>
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() => copyToClipboard(resolvedMarkdown)}
+                    onClick={() =>
+                      copyToClipboard(
+                        activeView === "json"
+                          ? JSON.stringify(data.intelligence, null, 2)
+                          : resolvedMarkdown
+                      )
+                    }
                     className="text-xs text-neutral-300 hover:text-cyan-300 border border-neutral-700 px-2.5 py-1 rounded transition"
                   >
-                    {copied ? "✓ Copied!" : "Copy Text"}
+                    {copied ? "✓ คัดลอกแล้ว!" : activeView === "json" ? "Copy JSON" : "Copy Text"}
                   </button>
                   <button
                     onClick={() => downloadMarkdown(resolvedMarkdown)}
@@ -868,14 +999,46 @@ function DocumentMode({
                 </div>
               </div>
 
-              {activeView === "formatted" ? (
+              {activeView === "smart" && (
+                <div className="flex flex-col gap-4">
+                  {data.intelligence?.bankSlip && (
+                    <SmartSlipCard
+                      slip={data.intelligence.bankSlip}
+                      typeName={data.intelligence.typeNameTh}
+                    />
+                  )}
+                  {data.intelligence?.receipt && (
+                    <SmartReceiptCard
+                      receipt={data.intelligence.receipt}
+                      typeName={data.intelligence.typeNameTh}
+                    />
+                  )}
+                  {data.intelligence?.docType === "general_document" && (
+                    <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4 text-xs text-neutral-300 flex flex-col gap-2">
+                      <span className="font-semibold text-cyan-300">📄 ข้อมูลการวิเคราะห์เอกสาร:</span>
+                      <ul className="list-disc list-inside space-y-1 text-neutral-400">
+                        {data.intelligence.keyInsights.map((insight, idx) => (
+                          <li key={idx}>{insight}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Render Structured Markdown underneath the card */}
+                  <RenderedMarkdownViewer markdown={resolvedMarkdown} />
+                </div>
+              )}
+
+              {activeView === "formatted" && (
                 <RenderedMarkdownViewer markdown={resolvedMarkdown} />
-              ) : (
+              )}
+
+              {activeView === "json" && (
                 <textarea
                   readOnly
-                  value={resolvedMarkdown || "(no text detected)"}
-                  rows={12}
-                  className="w-full resize-y rounded-md border border-neutral-800 bg-neutral-900 p-3 font-mono text-xs text-neutral-300"
+                  value={JSON.stringify(data.intelligence, null, 2)}
+                  rows={14}
+                  className="w-full resize-y rounded-md border border-neutral-800 bg-neutral-950 p-3 font-mono text-xs text-cyan-300"
                 />
               )}
             </div>
@@ -913,8 +1076,8 @@ function TextWitnessCard({ label, text, confidence }: { label: string; text: str
 }
 
 /**
- * Renders structured Markdown with clean typography, key-value badge layout,
- * and high readability for Thai text and slips.
+ * Renders structured Markdown with clean typography, responsive tables,
+ * key-value badge layout, and high readability for Thai text, slips, and invoices.
  */
 function RenderedMarkdownViewer({ markdown }: { markdown: string }) {
   if (!markdown.trim()) {
@@ -945,6 +1108,49 @@ function RenderedMarkdownViewer({ markdown }: { markdown: string }) {
             </h2>
           );
         }
+        if (trimmed.startsWith("### ")) {
+          return (
+            <h3 key={idx} className="text-sm font-semibold text-cyan-300 pt-1">
+              {trimmed.replace(/^###\s+/, "")}
+            </h3>
+          );
+        }
+        // Markdown Table rendering
+        if (trimmed.startsWith("|")) {
+          const tableLines = trimmed.split("\n").filter((l) => l.trim().length > 0);
+          if (tableLines.length >= 2) {
+            const headers = tableLines[0].split("|").slice(1, -1).map((c) => c.trim());
+            const rows = tableLines.slice(2).map((rowStr) =>
+              rowStr.split("|").slice(1, -1).map((c) => c.trim())
+            );
+            return (
+              <div key={idx} className="overflow-x-auto rounded-lg border border-neutral-800 my-2 shadow-sm">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-neutral-800/90 text-neutral-200">
+                    <tr>
+                      {headers.map((h, hIdx) => (
+                        <th key={hIdx} className="p-2.5 font-semibold border-b border-neutral-700">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800/60 bg-neutral-900/40">
+                    {rows.map((row, rIdx) => (
+                      <tr key={rIdx} className="hover:bg-white/5 transition">
+                        {row.map((cell, cIdx) => (
+                          <td key={cIdx} className="p-2.5 text-neutral-300">
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          }
+        }
         if (trimmed.startsWith("- ")) {
           const itemText = trimmed.replace(/^- /, "");
           // Key-value pair: **Key**: Value
@@ -973,3 +1179,4 @@ function RenderedMarkdownViewer({ markdown }: { markdown: string }) {
     </div>
   );
 }
+

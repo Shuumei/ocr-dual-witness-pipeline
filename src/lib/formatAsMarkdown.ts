@@ -1,5 +1,6 @@
 import type { OcrLine } from "./ocrTypes";
 import { normalizeThaiText, isThai } from "./thaiTextNormalizer";
+import { analyzeDocumentIntelligence } from "./documentIntelligence";
 
 function median(values: number[]): number {
   if (values.length === 0) return 0;
@@ -16,7 +17,7 @@ type BlockKind = "h1" | "h2" | "list" | "key-value" | "paragraph";
 /**
  * Converts OCR line bounding boxes into structured Markdown based on layout geometry.
  * Cleans Thai floating vowels, normalizes spacing, formats key-value pairs (slips/invoices),
- * and prevents accidental space insertion between wrapped Thai characters.
+ * embeds tables for receipts, and prevents accidental space insertion between wrapped Thai characters.
  */
 export function linesToMarkdown(lines: OcrLine[]): string {
   const usable = lines
@@ -24,6 +25,9 @@ export function linesToMarkdown(lines: OcrLine[]): string {
     .filter((l) => l.text.length > 0);
 
   if (usable.length === 0) return "";
+
+  const fullText = usable.map((l) => l.text).join("\n");
+  const intel = analyzeDocumentIntelligence(fullText, usable);
 
   const heights = usable.map((l) => l.bbox.y1 - l.bbox.y0);
   const medianHeight = median(heights) || 1;
@@ -83,6 +87,11 @@ export function linesToMarkdown(lines: OcrLine[]): string {
     if (b.kind === "key-value") return `- ${b.text}`;
     return b.text;
   });
+
+  // If a clean markdown table was extracted for line items in receipts/invoices, append it
+  if (intel.extractedMarkdownTable) {
+    rendered.push("\n### 📋 ตารางรายการสินค้า / บริการ\n" + intel.extractedMarkdownTable);
+  }
 
   return rendered.join("\n\n");
 }
