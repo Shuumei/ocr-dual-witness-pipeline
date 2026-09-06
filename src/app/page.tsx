@@ -79,6 +79,8 @@ interface MeterAnalyzeResult {
   witnessA: WitnessReading;
   witnessB: WitnessReading;
   result: ConsensusResult;
+  extractedLines?: string[];
+  isMultiLine?: boolean;
   isLikelyDocOrSlip?: boolean;
 }
 
@@ -88,9 +90,7 @@ function runMeterWitnesses(pixels: PixelSource, polarity: Polarity, autoAlign: b
   const b = decode(pixels, { sampleMode: "region", thresholdMode: "adaptive", polarity, startMargin: 4 });
   const witnessA: WitnessReading = { raw: a.reading, confidence: a.confidence, witness: "witness-a" };
   const witnessB: WitnessReading = { raw: b.reading, confidence: b.confidence, witness: "witness-b" };
-  const isLikelyDocOrSlip =
-    (!a.reading || a.reading.includes("?")) && (!b.reading || b.reading.includes("?"));
-  return { witnessA, witnessB, result: reconcileWitnesses(witnessA, witnessB), isLikelyDocOrSlip };
+  return { witnessA, witnessB, result: reconcileWitnesses(witnessA, witnessB) };
 }
 
 function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) => void }) {
@@ -101,7 +101,7 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
   const [data, setData] = useState<MeterAnalyzeResult | null>(null);
 
   // Manual ROI crop controls for blood pressure monitors / LCDs
-  const [useCrop, setUseCrop] = useState(false);
+  const [useCrop, setUseCrop] = useState(true);
   const [cropBox, setCropBox] = useState({ top: 15, left: 10, width: 80, height: 70 });
 
   const svgRef = useRef<SVGSVGElement>(null);
@@ -114,13 +114,10 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
     try {
       if (uploadedFile) {
         // Auto-downscales high-res mobile photos to prevent freezing
-        const raw = await getImagePixels(uploadedFile, 1000);
+        const raw = await getImagePixels(uploadedFile, 1200);
 
-        let targetPixels: PixelSource;
-        let polarity: Polarity;
-
+        let targetPixels: PixelSource = raw;
         if (useCrop) {
-          // Crop specific LCD region (ideal for blood pressure monitors)
           const rect: CropRect = {
             x: (cropBox.left / 100) * raw.width,
             y: (cropBox.top / 100) * raw.height,
@@ -128,19 +125,29 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
             height: (cropBox.height / 100) * raw.height,
           };
           targetPixels = cropPixelSource(raw, rect);
-          polarity = detectDisplayPolarity(targetPixels);
-        } else {
-          const detected = detectContent(raw);
-          if (!detected) {
-            targetPixels = raw;
-            polarity = detectDisplayPolarity(raw);
-          } else {
-            targetPixels = detected.pixels;
-            polarity = detected.polarity;
-          }
         }
 
-        setData(runMeterWitnesses(targetPixels, polarity, true));
+        // Render targetPixels onto a temporary canvas for high-precision real-device LCD OCR
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = targetPixels.width;
+        tempCanvas.height = targetPixels.height;
+        const ctx = tempCanvas.getContext("2d");
+        if (ctx) {
+          const imgData = ctx.createImageData(targetPixels.width, targetPixels.height);
+          imgData.data.set(targetPixels.data);
+          ctx.putImageData(imgData, 0, 0);
+        }
+
+        const { runDualLcdOcr } = await import("@/lib/meterOcr");
+        const lcdResult = await runDualLcdOcr(tempCanvas);
+
+        setData({
+          witnessA: lcdResult.witnessA,
+          witnessB: lcdResult.witnessB,
+          result: lcdResult.consensus,
+          extractedLines: lcdResult.extractedLines,
+          isMultiLine: lcdResult.isMultiLine,
+        });
       } else {
         if (!svgRef.current) throw new Error("No sample rendered yet.");
         const pixels = await getSvgPixels(svgRef.current);
@@ -230,55 +237,85 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
             </div>
 
             {useCrop && (
-              <div className="grid grid-cols-2 gap-3 text-xs text-neutral-400 sm:grid-cols-4">
-                <label className="flex flex-col gap-1">
-                  Top ({cropBox.top}%)
-                  <input
-                    type="range"
-                    min="0"
-                    max="80"
-                    value={cropBox.top}
-                    onChange={(e) => setCropBox({ ...cropBox, top: Number(e.target.value) })}
-                    className="accent-cyan-400"
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  Left ({cropBox.left}%)
-                  <input
-                    type="range"
-                    min="0"
-                    max="80"
-                    value={cropBox.left}
-                    onChange={(e) => setCropBox({ ...cropBox, left: Number(e.target.value) })}
-                    className="accent-cyan-400"
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  Width ({cropBox.width}%)
-                  <input
-                    type="range"
-                    min="20"
-                    max="100"
-                    value={cropBox.width}
-                    onChange={(e) => setCropBox({ ...cropBox, width: Number(e.target.value) })}
-                    className="accent-cyan-400"
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  Height ({cropBox.height}%)
-                  <input
-                    type="range"
-                    min="20"
-                    max="100"
-                    value={cropBox.height}
-                    onChange={(e) => setCropBox({ ...cropBox, height: Number(e.target.value) })}
-                    className="accent-cyan-400"
-                  />
-                </label>
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap gap-1.5 text-xs">
+                  <span className="text-neutral-500 py-1">Quick Presets:</span>
+                  <button
+                    onClick={() => setCropBox({ top: 20, left: 15, width: 70, height: 60 })}
+                    className="rounded bg-neutral-800 px-2 py-1 text-neutral-300 hover:bg-neutral-700"
+                  >
+                    Center LCD
+                  </button>
+                  <button
+                    onClick={() => setCropBox({ top: 25, left: 10, width: 80, height: 65 })}
+                    className="rounded bg-neutral-800 px-2 py-1 text-cyan-400 hover:bg-neutral-700"
+                  >
+                    เครื่องวัดความดัน (Omron)
+                  </button>
+                  <button
+                    onClick={() => setCropBox({ top: 20, left: 20, width: 60, height: 50 })}
+                    className="rounded bg-neutral-800 px-2 py-1 text-cyan-400 hover:bg-neutral-700"
+                  >
+                    เครื่องวัดน้ำตาล (Accu-Chek)
+                  </button>
+                  <button
+                    onClick={() => setCropBox({ top: 0, left: 0, width: 100, height: 100 })}
+                    className="rounded bg-neutral-800 px-2 py-1 text-neutral-400 hover:bg-neutral-700"
+                  >
+                    เต็มรูป (Full)
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-xs text-neutral-400 sm:grid-cols-4">
+                  <label className="flex flex-col gap-1">
+                    Top ({cropBox.top}%)
+                    <input
+                      type="range"
+                      min="0"
+                      max="80"
+                      value={cropBox.top}
+                      onChange={(e) => setCropBox({ ...cropBox, top: Number(e.target.value) })}
+                      className="accent-cyan-400"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    Left ({cropBox.left}%)
+                    <input
+                      type="range"
+                      min="0"
+                      max="80"
+                      value={cropBox.left}
+                      onChange={(e) => setCropBox({ ...cropBox, left: Number(e.target.value) })}
+                      className="accent-cyan-400"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    Width ({cropBox.width}%)
+                    <input
+                      type="range"
+                      min="20"
+                      max="100"
+                      value={cropBox.width}
+                      onChange={(e) => setCropBox({ ...cropBox, width: Number(e.target.value) })}
+                      className="accent-cyan-400"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    Height ({cropBox.height}%)
+                    <input
+                      type="range"
+                      min="20"
+                      max="100"
+                      value={cropBox.height}
+                      onChange={(e) => setCropBox({ ...cropBox, height: Number(e.target.value) })}
+                      className="accent-cyan-400"
+                    />
+                  </label>
+                </div>
               </div>
             )}
             <p className="text-xs text-neutral-500">
-              💡 Tip สำหรับเครื่องวัดความดัน: เปิด &quot;Custom LCD Crop&quot; เพื่อเล็งเฉพาะกรอบหน้าปัดดิจิตอล
+              💡 Tip สำหรับเครื่องวัดความดัน / น้ำตาล: เลือก Preset ด้านบนเพื่อจัดตำแหน่งกรอบสีฟ้าให้ครอบหน้าปัดตัวเลข
             </p>
           </div>
         )}
@@ -325,8 +362,8 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
       {data && (
         <section className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-3">
-            <MeterWitnessCard label="Witness A · point-sample / fixed threshold" reading={data.witnessA} />
-            <MeterWitnessCard label="Witness B · region-average / adaptive threshold" reading={data.witnessB} />
+            <MeterWitnessCard label={data.witnessA.witness || "Witness A"} reading={data.witnessA} />
+            <MeterWitnessCard label={data.witnessB.witness || "Witness B"} reading={data.witnessB} />
           </div>
 
           <div className={`rounded-lg border p-4 ${STATUS_STYLE[data.result.status]}`}>
@@ -336,6 +373,27 @@ function MeterMode({ onSwitchToDocument }: { onSwitchToDocument: (file: File) =>
               confidence {(data.result.confidence * 100).toFixed(0)}%
               {data.result.needsHumanReview && " — flagged for human review"}
             </p>
+
+            {/* Blood pressure / multi-row parameter breakdown */}
+            {data.extractedLines && data.extractedLines.length >= 2 && (
+              <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="rounded bg-black/20 p-1.5">
+                  <div className="text-neutral-400 font-medium">SYS (บน)</div>
+                  <div className="text-sm font-bold text-white">{data.extractedLines[0] || "—"}</div>
+                  <div className="text-[10px] text-neutral-400">mmHg</div>
+                </div>
+                <div className="rounded bg-black/20 p-1.5">
+                  <div className="text-neutral-400 font-medium">DIA (กลาง)</div>
+                  <div className="text-sm font-bold text-white">{data.extractedLines[1] || "—"}</div>
+                  <div className="text-[10px] text-neutral-400">mmHg</div>
+                </div>
+                <div className="rounded bg-black/20 p-1.5">
+                  <div className="text-neutral-400 font-medium">PULSE (ชีพจร)</div>
+                  <div className="text-sm font-bold text-white">{data.extractedLines[2] || "—"}</div>
+                  <div className="text-[10px] text-neutral-400">bpm</div>
+                </div>
+              </div>
+            )}
           </div>
 
           {data.isLikelyDocOrSlip && uploadedFile && (
