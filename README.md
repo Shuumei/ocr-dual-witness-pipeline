@@ -1,11 +1,20 @@
 # OCR Dual-Witness Consensus Engine
 
-Single-pass OCR can fail silently on ambiguous characters (e.g., `7` mistaken for `1`) or complex document layouts without providing reliable uncertainty signals. This project implements a **dual-witness consensus pipeline** running two independent, client-side recognition passes on every image. When both passes agree, confidence is boosted; disagreements are flagged for human review.
+> [!WARNING]
+> **Project Status & Disclaimer / สถานะโครงการและข้อจำกัดความแม่นยำ:**
+> โครงการนี้เป็นงานต้นแบบทดลอง (Experimental Prototype / Work in Progress) ที่กำลังพัฒนาและปรับปรุงอัลกอริทึมอย่างต่อเนื่อง
+> 
+> - **Local In-Browser Mode**: การประมวลผลแบบออฟไลน์ 100% (Heuristic 7-Segment Decoder & Tesseract WASM) มีข้อจำกัดเรื่องความแม่นยำสูงเมื่อเจอกับภาพถ่ายกล้องมือถือจริงที่มีมุมเอียง แสงสะท้อน หรือสภาพแสงไม่สม่ำเสมอ หากไม่จัดกรอบจอภาพให้พอดีอาจอ่านค่าผิดพลาดหรือไม่สามารถอ่านค่าได้
+> - **Recommendations**: สำหรับภาพถ่ายจริง ควรใช้เครื่องมือ **Crop Box** ครอบเฉพาะหน้าจอ LCD และกด **Auto-Deskew** เพื่อหมุนภาพให้ตั้งตรงก่อนวิเคราะห์ หรือใส่ Gemini API Key เพื่อใช้โหมด **Dual-Witness Hybrid (Local + Gemini 2.5 Flash Lite)** สำหรับภาพถ่ายที่มีความซับซ้อน
+> - **Human Verification Required**: ระบบนี้จัดทำขึ้นเพื่อการศึกษาและการทดลองระบบ Consensus ไม่สามารถใช้ทดแทนการวินิจฉัยทางการแพทย์หรือการตรวจสอบธุรกรรมทางการเงินจริงโดยปราศจากการยืนยันของมนุษย์ (Human Review)
+
+Single-pass OCR can fail silently on ambiguous characters (e.g., `7` mistaken for `1`) or complex document layouts without providing reliable uncertainty signals. This project implements a **dual-witness consensus pipeline** running two independent recognition passes on every image. When both passes agree, confidence is boosted; disagreements are flagged for human review.
 
 ### Features
-1. **7-Segment Meter Reading**: Deterministic pixel-sampling decoder with zero runtime dependencies.
+1. **7-Segment Meter Reading**: Deterministic pixel-sampling decoder with auto-deskew alignment.
 2. **Document & UI OCR**: In-browser text extraction via [Tesseract.js](https://github.com/naptha/tesseract.js) (WebAssembly) with heuristic-driven Markdown layout reconstruction.
-3. **100% Client-Side**: No backend server, external API keys, or cloud dependencies.
+3. **Dual-Witness Hybrid Option**: Combines local client-side models with Gemini 2.5 Flash Lite Cloud Vision for high-accuracy cross-validation.
+4. **100% Client-Side Ready**: Runs locally without mandatory cloud server dependencies.
 
 Inspired by the dual-witness consensus pattern deployed in [Unyna](https://unyna.unyhub.org) for medical meter display verification, reimplemented here from scratch with synthetic sample generators.
 
@@ -84,17 +93,25 @@ npm run test
 ```
 
 ```
- ✓ src/lib/consensus.test.ts        (8 tests)
- ✓ src/lib/cropToContent.test.ts    (3 tests)
- ✓ src/lib/imageDecoder.test.ts     (10 tests)
- ✓ src/lib/textConsensus.test.ts    (9 tests)
- ✓ src/lib/formatAsMarkdown.test.ts (7 tests)
+ ✓ src/lib/autoDeskew.test.ts           (3 tests)
+ ✓ src/lib/thaiTextNormalizer.test.ts   (7 tests)
+ ✓ src/lib/textConsensus.test.ts        (9 tests)
+ ✓ src/lib/cropToContent.test.ts        (3 tests)
+ ✓ src/lib/formatAsMarkdown.test.ts     (7 tests)
+ ✓ src/lib/consensus.test.ts            (8 tests)
+ ✓ src/lib/documentIntelligence.test.ts (5 tests)
+ ✓ src/lib/meterOcr.test.ts             (4 tests)
+ ✓ src/lib/imageDecoder.test.ts         (10 tests)
 
- Test Files  5 passed (5)
-      Tests  37 passed (37)
+ Test Files  9 passed (9)
+      Tests  56 passed (56)
 ```
 
 ### Key Test Scenarios
+- `autoDeskew.test.ts`: Projection profile variance tilt estimation across various angles (-45° to +45°).
+- `thaiTextNormalizer.test.ts`: Thai floating vowel normalization, tone mark order correction, and Thai digit conversion.
+- `documentIntelligence.test.ts`: Bank slip detection, receipt layout analysis, and smart insight generation.
+- `meterOcr.test.ts`: Blood pressure multi-line splitting and systolic/diastolic/pulse parsing.
 - `imageDecoder.test.ts`: Digits 0–9 under both sampling modes, decimal point detection, clean termination on whitespace, zero confidence on blank frames, dimmed-pixel noise immunity test, and auto-align recovery on shifted crops.
 - `cropToContent.test.ts`: Light-on-dark, dark-on-light detection, and low-contrast rejection.
 - `consensus.test.ts`: Exact match confidence boosting, single-character divergence, length mismatches, and boundary thresholds.
