@@ -1,4 +1,5 @@
 import type { OcrLine } from "./ocrTypes";
+import { normalizeThaiText, isThai } from "./thaiTextNormalizer";
 
 function median(values: number[]): number {
   if (values.length === 0) return 0;
@@ -8,16 +9,20 @@ function median(values: number[]): number {
 }
 
 const BULLET_PATTERN = /^[-•*▪○●]\s+/;
+const KEY_VALUE_PATTERN = /^([^\n:：]{2,30})[:：]\s*(.+)$/;
 
-type BlockKind = "h1" | "h2" | "list" | "paragraph";
+type BlockKind = "h1" | "h2" | "list" | "key-value" | "paragraph";
 
 /**
  * Converts OCR line bounding boxes into structured Markdown based on layout geometry.
- * Line heights relative to the page median determine heading levels, bullet markers
- * become list items, and adjacent lines with small vertical gaps are merged into paragraphs.
+ * Cleans Thai floating vowels, normalizes spacing, formats key-value pairs (slips/invoices),
+ * and prevents accidental space insertion between wrapped Thai characters.
  */
 export function linesToMarkdown(lines: OcrLine[]): string {
-  const usable = lines.filter((l) => l.text.trim().length > 0);
+  const usable = lines
+    .map((l) => ({ ...l, text: normalizeThaiText(l.text.trim()) }))
+    .filter((l) => l.text.length > 0);
+
   if (usable.length === 0) return "";
 
   const heights = usable.map((l) => l.bbox.y1 - l.bbox.y0);
@@ -27,13 +32,14 @@ export function linesToMarkdown(lines: OcrLine[]): string {
   let prevLine: OcrLine | null = null;
 
   for (const line of usable) {
-    const text = line.text.trim();
+    const text = line.text;
     const height = line.bbox.y1 - line.bbox.y0;
     const gap = prevLine ? line.bbox.y0 - prevLine.bbox.y1 : 0;
     const newParagraph = !prevLine || gap > medianHeight * 0.8;
 
     let kind: BlockKind;
     let content = text;
+
     if (height >= medianHeight * 1.6) {
       kind = "h1";
     } else if (height >= medianHeight * 1.25) {
@@ -41,15 +47,29 @@ export function linesToMarkdown(lines: OcrLine[]): string {
     } else if (BULLET_PATTERN.test(text)) {
       kind = "list";
       content = text.replace(BULLET_PATTERN, "");
+    } else if (KEY_VALUE_PATTERN.test(text)) {
+      kind = "key-value";
+      const match = text.match(KEY_VALUE_PATTERN);
+      if (match) {
+        content = `**${match[1].trim()}**: ${match[2].trim()}`;
+      }
     } else {
       kind = "paragraph";
     }
 
     const canMergeIntoPrev =
-      kind === "paragraph" && !newParagraph && blocks.length > 0 && blocks[blocks.length - 1].kind === "paragraph";
+      kind === "paragraph" &&
+      !newParagraph &&
+      blocks.length > 0 &&
+      blocks[blocks.length - 1].kind === "paragraph";
 
     if (canMergeIntoPrev) {
-      blocks[blocks.length - 1].text += " " + content;
+      const prevBlock = blocks[blocks.length - 1];
+      const prevLastChar = prevBlock.text.slice(-1);
+      const nextFirstChar = content.slice(0, 1);
+      // In Thai script, lines break without spaces. Do not inject artificial space between Thai characters.
+      const shouldAddSpace = !isThai(prevLastChar) && !isThai(nextFirstChar);
+      prevBlock.text += (shouldAddSpace ? " " : "") + content;
     } else {
       blocks.push({ kind, text: content });
     }
@@ -60,6 +80,7 @@ export function linesToMarkdown(lines: OcrLine[]): string {
     if (b.kind === "h1") return `# ${b.text}`;
     if (b.kind === "h2") return `## ${b.text}`;
     if (b.kind === "list") return `- ${b.text}`;
+    if (b.kind === "key-value") return `- ${b.text}`;
     return b.text;
   });
 

@@ -98,9 +98,10 @@ function isLit(brightness: number, threshold: number, polarity: Polarity): boole
   return polarity === "dark-on-light" ? brightness < threshold : brightness > threshold;
 }
 
-export function decodeDisplay(px: PixelSource, options: DecodeOptions): DecodeResult {
+export function decodeDisplay(px: PixelSource, options: DecodeOptions, precomputedThreshold?: number): DecodeResult {
   const scale = options.scale ?? px.height / VIEWPORT_HEIGHT;
-  const threshold = options.thresholdMode === "fixed" ? FIXED_THRESHOLD : computeAdaptiveThreshold(px);
+  const threshold =
+    precomputedThreshold ?? (options.thresholdMode === "fixed" ? FIXED_THRESHOLD : computeAdaptiveThreshold(px));
   const polarity = options.polarity ?? "light-on-dark";
   const startMargin = options.startMargin ?? 4;
 
@@ -156,16 +157,23 @@ export function decodeDisplay(px: PixelSource, options: DecodeOptions): DecodeRe
 
 /**
  * Decodes display content across candidate scale factors and horizontal offsets.
- * Selects the candidate with the fewest unrecognized segments and highest confidence
- * to compensate for boundary padding or scale variations.
+ * Precomputes adaptive threshold once to avoid redundant sampling per iteration.
  */
 export function decodeDisplayAutoAlign(px: PixelSource, options: DecodeOptions): DecodeResult {
   const baseScale = options.scale ?? px.height / VIEWPORT_HEIGHT;
+  const precomputedThreshold =
+    options.thresholdMode === "fixed" ? FIXED_THRESHOLD : computeAdaptiveThreshold(px);
+
   let best: DecodeResult = { reading: "", confidence: 0 };
   let bestScore = -Infinity;
+
   for (let scaleFactor = 0.75; scaleFactor <= 1.3; scaleFactor += 0.05) {
     for (let margin = -10; margin <= 10; margin += 1) {
-      const result = decodeDisplay(px, { ...options, startMargin: margin, scale: baseScale * scaleFactor });
+      const result = decodeDisplay(
+        px,
+        { ...options, startMargin: margin, scale: baseScale * scaleFactor },
+        precomputedThreshold
+      );
       if (result.reading.length === 0) continue;
       const unknownCount = (result.reading.match(/\?/g) ?? []).length;
       // Prefer fuller, cleaner reads over a short accidental match, then confidence.

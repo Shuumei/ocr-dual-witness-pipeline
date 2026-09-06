@@ -41,6 +41,28 @@ function cornerAverage(px: PixelSource, patch = 8): number {
 }
 
 /**
+ * Samples border pixels around the perimeter to robustly determine background luminance.
+ */
+export function detectDisplayPolarity(px: PixelSource): Polarity {
+  const samples: number[] = [];
+  const stepX = Math.max(1, Math.floor(px.width / 20));
+  const stepY = Math.max(1, Math.floor(px.height / 20));
+
+  for (let x = 0; x < px.width; x += stepX) {
+    samples.push(luminanceAt(px, x, 0));
+    samples.push(luminanceAt(px, x, px.height - 1));
+  }
+  for (let y = 0; y < px.height; y += stepY) {
+    samples.push(luminanceAt(px, 0, y));
+    samples.push(luminanceAt(px, px.width - 1, y));
+  }
+
+  const avgBorder = samples.length === 0 ? 128 : samples.reduce((a, b) => a + b, 0) / samples.length;
+  // If border is bright, display is dark digits on light background (e.g. typical LCD)
+  return avgBorder > 120 ? "dark-on-light" : "light-on-dark";
+}
+
+/**
  * Detects display bounding box and polarity (light-on-dark vs dark-on-light)
  * from pixel contrast. Returns null if contrast is insufficient.
  */
@@ -52,8 +74,7 @@ export function detectContent(px: PixelSource): DetectedContent | null {
   if (max - min < 20) return null; // no meaningful contrast anywhere
 
   const threshold = (min + max) / 2;
-  const backgroundBrightness = cornerAverage(px);
-  const polarity: Polarity = backgroundBrightness > threshold ? "dark-on-light" : "light-on-dark";
+  const polarity = detectDisplayPolarity(px);
   const isContent = (b: number) => (polarity === "dark-on-light" ? b < threshold : b > threshold);
 
   const minContentPerLine = Math.max(2, Math.floor(Math.min(px.width, px.height) * 0.01));

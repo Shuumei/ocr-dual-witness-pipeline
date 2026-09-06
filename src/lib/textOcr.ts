@@ -1,5 +1,6 @@
 import Tesseract from "tesseract.js";
 import type { OcrLine } from "./ocrTypes";
+import { normalizeThaiText } from "./thaiTextNormalizer";
 
 export interface OcrWitnessResult {
   lines: OcrLine[];
@@ -17,7 +18,7 @@ function extractLines(data: Tesseract.Page): OcrLine[] {
   for (const block of data.blocks ?? []) {
     for (const paragraph of block.paragraphs) {
       for (const line of paragraph.lines) {
-        lines.push({ text: line.text, confidence: line.confidence / 100, bbox: line.bbox });
+        lines.push({ text: normalizeThaiText(line.text), confidence: line.confidence / 100, bbox: line.bbox });
       }
     }
   }
@@ -27,7 +28,7 @@ function extractLines(data: Tesseract.Page): OcrLine[] {
 async function runOcrPass(worker: Tesseract.Worker, psm: Tesseract.PSM, image: Tesseract.ImageLike): Promise<OcrWitnessResult> {
   await worker.setParameters({ tessedit_pageseg_mode: psm });
   const { data } = await worker.recognize(image, {}, { blocks: true });
-  return { lines: extractLines(data), text: data.text, confidence: data.confidence / 100 };
+  return { lines: extractLines(data), text: normalizeThaiText(data.text), confidence: data.confidence / 100 };
 }
 
 /**
