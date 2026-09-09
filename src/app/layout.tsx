@@ -22,7 +22,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OCR Dual-Witness Consensus Engine | Enterprise Edition",
+  title: "OCR Dual-Witness Consensus Engine",
   description:
     "Cross-validates text and digit extraction using two independent decoding passes. Supports offline Local WASM models & Gemini 2.5 Flash Lite Vision Engine.",
 };

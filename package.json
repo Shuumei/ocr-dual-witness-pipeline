@@ -1,6 +1,7 @@
 {
   "name": "ocr-dual-witness-pipeline",
   "version": "0.1.0",
+  "description": "Dual-witness OCR & consensus pipeline for Thai documents and digital meters using Local WASM and Gemini Vision.",
   "private": true,
   "scripts": {
     "dev": "next dev",

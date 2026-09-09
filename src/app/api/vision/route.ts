@@ -70,7 +70,7 @@ Return ONLY valid JSON matching this structure:
   "notes": string
 }`;
     } else {
-      systemPrompt = `You are an enterprise-grade Thai and English Document OCR & Semantic Intelligence AI.
+      systemPrompt = `You are an accurate, high-fidelity Thai and English Document OCR & Semantic Intelligence AI.
 Your mission is to analyze the document image, identify its category and context, extract all key fields into structured entities, and organize the output into a beautifully structured, highly readable Markdown document.
 
 CRITICAL THAI LANGUAGE & TEXT RULES:

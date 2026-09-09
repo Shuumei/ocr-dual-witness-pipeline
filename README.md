@@ -1,13 +1,13 @@
-# OCR Dual-Witness Consensus Engine (Enterprise Edition)
+# OCR Dual-Witness Consensus Engine
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-shadcn%2Fui-38bdf8?logo=tailwindcss)](https://ui.shadcn.com/)
-[![Tests](https://img.shields.io/badge/Vitest-56%20passed-emerald)](https://vitest.dev/)
+[![Tests](https://img.shields.io/badge/Vitest-58%20passed-emerald)](https://vitest.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-> **ระบบตรวจสอบเอกสารและมิเตอร์ดิจิทัลสองชั้น (Dual-Witness Consensus Engine)** ระดับ Enterprise พร้อมผสานพลัง **Local WASM Engine** (ประมวลผลในเบราว์เซอร์ 100%) ร่วมกับ **Google Gemini Vision AI** เพื่อตรวจสอบความสอดคล้องของผลลัพธ์ ป้องกันความผิดพลาดของ OCR รอบเดียว (Single-Pass OCR) และยกระดับความมั่นใจสูงสุด
+> **ระบบตรวจสอบเอกสารและมิเตอร์ดิจิทัลสองชั้น (Dual-Witness Consensus Engine)** พร้อมผสานพลัง **Local WASM Engine** (ประมวลผลในเบราว์เซอร์ 100%) ร่วมกับ **Google Gemini Vision AI** เพื่อตรวจสอบความสอดคล้องของผลลัพธ์ ป้องกันความผิดพลาดของ OCR รอบเดียว (Single-Pass OCR) และยกระดับความแม่นยำสูงสุด
 
 ---
 
