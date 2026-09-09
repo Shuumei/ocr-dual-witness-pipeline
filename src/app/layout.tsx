@@ -35,9 +35,9 @@ export default function RootLayout({
   return (
     <html
       lang="th"
-      className={`${notoSansThai.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased dark`}
+      className={`${notoSansThai.variable} ${inter.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[#090d16] text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
+      <body className="min-h-full flex flex-col bg-[#f8fafc] text-slate-900 font-sans selection:bg-slate-900 selection:text-white">
         {children}
       </body>
     </html>

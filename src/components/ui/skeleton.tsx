@@ -8,7 +8,7 @@ function Skeleton({
   return (
     <div
       className={cn(
-        "animate-pulse rounded-lg bg-slate-800/80 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.8s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/5 before:to-transparent",
+        "animate-pulse rounded-lg bg-slate-200/80 relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.8s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/40 before:to-transparent",
         className
       )}
       {...props}

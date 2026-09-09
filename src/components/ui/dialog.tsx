@@ -24,7 +24,7 @@ function Dialog({ open, onOpenChange, children }: DialogProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity animate-in fade-in"
+        className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs transition-opacity animate-in fade-in"
         onClick={() => onOpenChange(false)}
         aria-hidden="true"
       />
@@ -41,7 +41,7 @@ const DialogContent = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "relative w-full rounded-2xl border border-slate-700/80 bg-slate-900 p-6 shadow-2xl shadow-black/60 text-slate-100 animate-in zoom-in-95 duration-150",
+      "relative w-full rounded-2xl border border-slate-200 bg-white p-6 shadow-xl text-slate-800 animate-in zoom-in-95 duration-150",
       className
     )}
     {...props}
@@ -56,7 +56,7 @@ const DialogHeader = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("flex flex-col space-y-1.5 text-left border-b border-slate-800 pb-4", className)}
+    className={cn("flex flex-col space-y-1.5 text-left border-b border-slate-100 pb-4", className)}
     {...props}
   />
 );
@@ -68,7 +68,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h2
     ref={ref}
-    className={cn("text-base sm:text-lg font-bold text-slate-100 leading-none", className)}
+    className={cn("text-base sm:text-lg font-semibold text-slate-900 leading-none", className)}
     {...props}
   />
 ));
@@ -80,7 +80,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn("text-xs sm:text-sm text-slate-400 leading-relaxed", className)}
+    className={cn("text-xs sm:text-sm text-slate-500 leading-relaxed", className)}
     {...props}
   />
 ));
@@ -92,7 +92,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4 border-t border-slate-800 gap-2 sm:gap-0",
+      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4 border-t border-slate-100 gap-2 sm:gap-0",
       className
     )}
     {...props}

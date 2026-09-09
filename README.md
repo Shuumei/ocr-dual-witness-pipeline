@@ -1,104 +1,146 @@
-# OCR Dual-Witness Consensus Engine
+# OCR Dual-Witness Consensus Engine (Enterprise Edition)
 
-> [!WARNING]
-> **Project Status & Disclaimer / สถานะโครงการและข้อจำกัดความแม่นยำ:**
-> โครงการนี้เป็นงานต้นแบบทดลอง (Experimental Prototype / Work in Progress) ที่กำลังพัฒนาและปรับปรุงอัลกอริทึมอย่างต่อเนื่อง
-> 
-> - **Local In-Browser Mode**: การประมวลผลแบบออฟไลน์ 100% (Heuristic 7-Segment Decoder & Tesseract WASM) มีข้อจำกัดเรื่องความแม่นยำสูงเมื่อเจอกับภาพถ่ายกล้องมือถือจริงที่มีมุมเอียง แสงสะท้อน หรือสภาพแสงไม่สม่ำเสมอ หากไม่จัดกรอบจอภาพให้พอดีอาจอ่านค่าผิดพลาดหรือไม่สามารถอ่านค่าได้
-> - **Recommendations**: สำหรับภาพถ่ายจริง ควรใช้เครื่องมือ **Crop Box** ครอบเฉพาะหน้าจอ LCD และกด **Auto-Deskew** เพื่อหมุนภาพให้ตั้งตรงก่อนวิเคราะห์ หรือใส่ Gemini API Key เพื่อใช้โหมด **Dual-Witness Hybrid (Local + Gemini 2.5 Flash Lite)** สำหรับภาพถ่ายที่มีความซับซ้อน
-> - **Human Verification Required**: ระบบนี้จัดทำขึ้นเพื่อการศึกษาและการทดลองระบบ Consensus ไม่สามารถใช้ทดแทนการวินิจฉัยทางการแพทย์หรือการตรวจสอบธุรกรรมทางการเงินจริงโดยปราศจากการยืนยันของมนุษย์ (Human Review)
+[![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-shadcn%2Fui-38bdf8?logo=tailwindcss)](https://ui.shadcn.com/)
+[![Tests](https://img.shields.io/badge/Vitest-56%20passed-emerald)](https://vitest.dev/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Single-pass OCR can fail silently on ambiguous characters (e.g., `7` mistaken for `1`) or complex document layouts without providing reliable uncertainty signals. This project implements a **dual-witness consensus pipeline** running two independent recognition passes on every image. When both passes agree, confidence is boosted; disagreements are flagged for human review.
-
-### Features
-1. **7-Segment Meter Reading**: Deterministic pixel-sampling decoder with auto-deskew alignment.
-2. **Document & UI OCR**: In-browser text extraction via [Tesseract.js](https://github.com/naptha/tesseract.js) (WebAssembly) with heuristic-driven Markdown layout reconstruction.
-3. **Dual-Witness Hybrid Option**: Combines local client-side models with Gemini 2.5 Flash Lite Cloud Vision for high-accuracy cross-validation.
-4. **100% Client-Side Ready**: Runs locally without mandatory cloud server dependencies.
-
-Inspired by the dual-witness consensus pattern deployed in [Unyna](https://unyna.unyhub.org) for medical meter display verification, reimplemented here from scratch with synthetic sample generators.
+> **ระบบตรวจสอบเอกสารและมิเตอร์ดิจิทัลสองชั้น (Dual-Witness Consensus Engine)** ระดับ Enterprise พร้อมผสานพลัง **Local WASM Engine** (ประมวลผลในเบราว์เซอร์ 100%) ร่วมกับ **Google Gemini Vision AI** เพื่อตรวจสอบความสอดคล้องของผลลัพธ์ ป้องกันความผิดพลาดของ OCR รอบเดียว (Single-Pass OCR) และยกระดับความมั่นใจสูงสุด
 
 ---
 
-## Mode 1: Meter Reading (7-Segment Decoder)
+## 🌟 จุดเด่นและฟีเจอร์หลัก (Key Features)
+
+### 1. 📟 Meter Reading & Medical Display Engine (เครื่องวัดดิจิทัลและการแพทย์)
+- **เครื่องวัดน้ำตาลในเลือด (Blood Glucose Meter)**:
+  - สกัดค่าระดับน้ำตาล (เช่น `106 mg/dL` หรือ `mmol/L`) และวันเวลาที่บันทึกบนหน้าจอ
+  - ประเมินผลอัตโนมัติตามเกณฑ์สากล **ADA Guideline (American Diabetes Association)** (ปกติก่อนอาหาร / เสี่ยงเบาหวาน / สูง)
+- **เครื่องวัดความดันโลหิต (Blood Pressure Monitor)**:
+  - สกัดค่า SYS (ความดันตัวบน), DIA (ความดันตัวล่าง) และ PULSE (อัตราการเต้นของหัวใจ)
+  - ประเมินผลสุขภาพหัวใจตามเกณฑ์ **AHA Guideline (American Heart Association)**
+- **มิเตอร์ดิจิทัลทั่วไปและตัวเลข 7-Segment (Utility & Counter)**:
+  - Heuristic deterministic pixel-sampling พร้อมตารางถอดรหัส Segment ในเบราว์เซอร์
+- **ระบบจัดตำแหน่งและตัดภาพแบบ 100% User-Controlled**:
+  - Interactive Drag-to-Crop & ROI Selection พร้อมพรีวิวแบบเรียลไทม์
+  - ปุ่ม Preset หน้าปัดอุปกรณ์ (เครื่องวัดความดัน, เครื่องวัดน้ำตาล, Center LCD, เต็มรูป)
+  - เครื่องมือหมุนภาพด้วยตนเอง (`-90°`, `+90°`, `-5°`, `+5°`, `Reset 0°` และ Fine Angle Slider) ปราศจากการหมุนอัตโนมัติที่ทำให้ภาพคลาดเคลื่อน
+
+---
+
+### 2. 📑 Document OCR & Thai Semantic Intelligence (สกัดข้อความและเอกสารภาษาไทย)
+- **ระบบจัดระเบียบโครงสร้างเอกสารและ Markdown ชั้นสูง**:
+  - วิเคราะห์และจำแนกประเภทเอกสารอัตโนมัติ (Document Classification):
+    - 🧾 **สลิปโอนเงินธนาคาร (`bank_slip`)**: ธนาคารต้นทาง/ปลายทาง, จำนวนเงิน, วันเวลา, ผู้โอน, ผู้รับ, เลขอ้างอิงธุรกรรม
+    - 🛒 **ใบเสร็จรับเงิน / ใบกำกับภาษี (`receipt_invoice`)**: ชื่อสถานประกอบการ, เลขประจำตัวผู้เสียภาษี 13 หลัก, ตารางรายการสินค้าพร้อมจำนวนและราคา, Subtotal, VAT 7%, ยอดรวมสุทธิ
+    - 🪪 **บัตรประชาชน / เอกสารยืนยันตัวตน (`id_card`)**: เลขประจำตัวประชาชน 13 หลัก, ชื่อ-นามสกุล (TH/EN), วันเกิด, ที่อยู่, วันหมดอายุ
+    - 🏥 **เอกสารทางการแพทย์ / ผลตรวจแล็บ (`medical_document`)**: ข้อมูลคนไข้, สถานพยาบาล, ค่าผลการตรวจวิเคราะห์
+    - 📜 **หนังสือราชการ / สัญญา / ข้อตกลง (`official_contract`)**: ชื่อเรื่อง, คู่สัญญา, วันที่บังคับใช้, ข้อความสำคัญ
+    - 📄 **เอกสารทั่วไป / รายงาน (`general_document`)**
+- **แก้ปัญหาสระลอยภาษาไทย (Thai Floating Vowel & Tone Normalizer)**:
+  - จัดระเบียบวรรณยุกต์ซ้อน สระบน-ล่างให้ถูกต้องตามหลักไวยากรณ์ภาษาไทย
+- **Markdown Document Output**:
+  - สรุปผลลัพธ์เป็นโครงสร้าง Markdown สวยงาม รองรับ Callout (`> ...`), Dividers (`---`), ตาราง Markdown Table และ Key-Value Split
+  - รองรับการ Export เป็นไฟล์ `.md` หรือคัดลอกลงคลิปบอร์ดได้ทันที
+
+---
+
+### 3. ⚖️ สถาปัตยกรรมฉันทามติสองพยาน (Dual-Witness Consensus Architecture)
 
 ```mermaid
-flowchart LR
-    A1[Rendered SVG / Canvas] --> B[Witness A: Point-sample, Fixed threshold]
-    A2[Uploaded Image] --> X[cropToContent: Auto-detect ROI & polarity]
-    X --> B
-    A1 --> C[Witness B: 3x3 Region-average, Adaptive threshold]
-    X --> C
-    B --> D[reconcileWitnesses]
-    C --> D
-    D -->|Exact match| E[Agree: Confidence boosted]
-    D -->|Minor mismatch >=75%| F[Partial agreement: Flagged for review]
-    D -->|Major mismatch / length diff| G[Disagreement: Unresolved]
+flowchart TD
+    Img[ภาพถ่าย / เอกสารที่อัปโหลด] --> W_A[Witness A: Local Engine WASM]
+    Img --> W_B[Witness B: Cloud Vision Gemini]
+    
+    W_A --> Rec[Consensus Reconciler Engine]
+    W_B --> Rec
+    
+    Rec -->|ผลลัพธ์ตรงกัน 100%| Agree[Consensus Agree: เพิ่มความมั่นใจสูงสุด]
+    Rec -->|อ่านได้ข้างเดียว / ภาพถ่ายจริง| SmartAdopt[Smart Adopt: อิงพยานความมั่นใจสูง ปลด Flag Review]
+    Rec -->|ผลอ่านขัดแย้งกันเกินเกณฑ์| Disagree[Consensus Disagreement: แจ้งเตือนมนุษย์ตรวจสอบ]
 ```
 
-Both witnesses scan horizontally across the image to locate digit boundaries and evaluate segment intensity against a 7-segment lookup table, but employ distinct sampling strategies:
-
-| Strategy | Witness A | Witness B |
-|---|---|---|
-| **Sampling** | Single-pixel point sample at segment center | 3×3 grid average across segment area |
-| **Thresholding** | Fixed intensity threshold (`128`) | Adaptive threshold (luminance midpoint per image) |
-
-Single-pixel sampling is fast but sensitive to isolated dead pixels or noise. Region-averaging smooths localized sensor artifacts, while adaptive thresholding handles uneven lighting and high-glare displays.
-
-Consensus logic in [`consensus.ts`](src/lib/consensus.ts) reconciles the outputs:
-
-- **Exact match**: Returns status `agree` with a confidence boost (capped at `0.99`).
-- **Partial agreement** ($\ge 75\%$ character overlap): Returns the higher-confidence reading but sets `needsHumanReview: true`.
-- **Disagreement** (length mismatch or $< 75\%$ match): Returns `null` consensus and flags for review.
-
-### Image Upload & Auto-Alignment
-
-Uploaded photos lack fixed camera positioning. The upload pipeline applies two preprocessing steps:
-1. [`cropToContent.ts`](src/lib/cropToContent.ts): Determines the active display bounding box and polarity (light digits on dark background vs. dark on light).
-2. [`decodeDisplayAutoAlign`](src/lib/imageDecoder.ts): Sweeps across candidate scale factors and horizontal offsets to locate optimal digit alignments before decoding.
+- **Dual-Witness Hybrid (แนะนำ)**: ตรวจสอบความสอดคล้องระหว่าง Local WASM กับ Cloud Vision AI
+- **Cloud Vision Only (AI-Only)**: ประมวลผลผ่าน Gemini Vision API โดยตรง เหมาะสำหรับภาพถ่ายจริงที่มีมุมเอียงหรือสภาพแสงซับซ้อน
+- **Local WASM Only**: ทำงานแบบ Offline ในเครื่อง 100% เหมาะสำหรับภาพสังเคราะห์และเอกสารทั่วไป
 
 ---
 
-## Mode 2: Document & UI OCR
-
-General text extraction uses [Tesseract.js](https://github.com/naptha/tesseract.js) running client-side in WebAssembly. Two passes evaluate the same image under different page segmentation modes (PSM):
-
-| Strategy | Witness A | Witness B |
-|---|---|---|
-| **Segmentation** | `AUTO` (Tesseract automatic layout detection) | `SPARSE_TEXT` (Unstructured, scattered text detection) |
-
-On standard single-column text, both modes converge. On complex UI layouts (icons, isolated badges, multi-column cards), the two modes frequently produce differing segmentations.
-
-Because OCR output spans multi-word paragraphs where a single dropped character shifts subsequent indices, [`textConsensus.ts`](src/lib/textConsensus.ts) computes normalized Levenshtein similarity over compared prefixes rather than strict index matching:
-
-- **Similarity == 1.0**: `agree` status with boosted confidence.
-- **Similarity $\ge 0.75$**: `partial-agreement`, returns higher confidence witness, flagged for review.
-- **Similarity $< 0.75$**: `disagreement`, presents both witness outputs side-by-side.
-
-### Geometric Markdown Reconstruction
-
-Markdown structure is generated by [`formatAsMarkdown.ts`](src/lib/formatAsMarkdown.ts) using line geometry rather than language models:
-- Line bounding box height relative to the page median height determines heading levels (`#`, `##`).
-- Leading bullet glyphs (`-`, `*`, `•`) map to Markdown list items.
-- Consecutive lines separated by small vertical gaps are merged into paragraphs; larger gaps trigger paragraph breaks.
+### 4. 🔑 ปรับแต่งโมเดล Gemini และความปลอดภัย (BYOK & Privacy First)
+- **Dynamic Model Selection**: เลือกโมเดลที่ต้องการใช้งานได้อย่างอิสระในหน้าการตั้งค่า (Settings):
+  - `gemini-2.5-flash-lite` (เร็ว ประหยัดโควต้า แนะนำสำหรับการใช้งานทั่วไป)
+  - `gemini-2.5-flash` (สมดุลระหว่างความเร็วและความแม่นยำ)
+  - `gemini-2.5-pro` (ความแม่นยำสูงสุดสำหรับเอกสารซับซ้อน)
+  - `Custom Model Name` (ระบุชื่อโมเดลเฉพาะเจาะจงได้เอง)
+- **Bring Your Own Key (BYOK)**: API Key ถูกบันทึกไว้ใน `localStorage` ของเบราว์เซอร์ผู้ใช้เท่านั้น ไม่มีการเก็บลงฐานข้อมูลหรือเซิร์ฟเวอร์
+- **API Key Enforcement**: แสดงแถบแจ้งเตือนและระบบล็อกปุ่มอัตโนมัติเมื่อตรวจพบการอัปโหลดภาพจริงที่ต้องพึ่งพา AI ความแม่นยำสูง
 
 ---
 
-## Verification & Test Suite
+## 🛠️ เทคโนโลยีที่ใช้ (Tech Stack)
 
-Sampling strategies, thresholding functions, and consensus reconciliation are pure functions with unit tests covering synthetic edge cases:
+- **Frontend & App Router**: [Next.js 16 (Turbopack)](https://nextjs.org/), [React 19](https://react.dev/), [TypeScript](https://www.typescriptlang.org/)
+- **UI & Styling**: [shadcn/ui](https://ui.shadcn.com/) (Card, Button, Badge, Dialog, Tabs, Separator, Skeleton, StepProgress), [Tailwind CSS](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
+- **OCR Engines**:
+  - Client-Side: [Tesseract.js](https://github.com/naptha/tesseract.js) (WebAssembly) & Custom 7-Segment Heuristic Decoder
+  - Cloud AI: Google Gemini Vision API (Multimodal Structured Intelligence)
+- **Unit Testing**: [Vitest](https://vitest.dev/) (56 Unit Tests ครอบคลุม 9 โมดูล)
+
+---
+
+## 🚀 การติดตั้งและเริ่มใช้งาน (Getting Started)
+
+### ความต้องการของระบบ:
+- Node.js 18.17 หรือใหม่กว่า
+- เบราว์เซอร์สมัยใหม่ (Chrome, Edge, Firefox, Safari)
+
+### 1. โคลนคลังโค้ดและติดตั้ง Dependencies
+```bash
+git clone https://github.com/Shuumei/ocr-dual-witness-pipeline.git
+cd ocr-dual-witness-pipeline
+npm install
+```
+
+### 2. กำหนดค่าสภาพแวดล้อม (ทางเลือก)
+สร้างไฟล์ `.env.local` สำหรับกำหนด Default Model หรือ API Key ระดับเซิร์ฟเวอร์:
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash-lite
+```
+*(หมายเหตุ: ผู้ใช้สามารถกรอก Gemini API Key ผ่านปุ่ม **Engine Settings** บนหน้าเว็บได้โดยตรงโดยไม่ต้องตั้งค่าในไฟล์)*
+
+### 3. รันโปรเจกต์ในโหมด Development
+```bash
+npm run dev
+```
+เปิดเบราว์เซอร์ไปที่ [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 🧪 การทดสอบระบบ (Test Suite & Verification)
+
+โปรเจกต์มีชุดทดสอบอัตโนมัติครอบคลุมทั้งการคำนวณฉันทามติ, การตัดสระลอยไทย, การสกัดเอกสาร, และตัวถอดรหัสภาพ:
 
 ```bash
-npm run test
+# รัน Unit Tests ทั้งหมด
+npm test
+
+# ตรวจสอบรูปแบบโค้ด (Linting)
+npm run lint
+
+# ทดสอบคอมไพล์ Production Build
+npm run build
 ```
 
-```
+ผลการทดสอบ:
+```text
  ✓ src/lib/autoDeskew.test.ts           (3 tests)
  ✓ src/lib/thaiTextNormalizer.test.ts   (7 tests)
- ✓ src/lib/textConsensus.test.ts        (9 tests)
  ✓ src/lib/cropToContent.test.ts        (3 tests)
- ✓ src/lib/formatAsMarkdown.test.ts     (7 tests)
  ✓ src/lib/consensus.test.ts            (8 tests)
+ ✓ src/lib/textConsensus.test.ts        (9 tests)
+ ✓ src/lib/formatAsMarkdown.test.ts     (7 tests)
  ✓ src/lib/documentIntelligence.test.ts (5 tests)
  ✓ src/lib/meterOcr.test.ts             (4 tests)
  ✓ src/lib/imageDecoder.test.ts         (10 tests)
@@ -107,57 +149,8 @@ npm run test
       Tests  56 passed (56)
 ```
 
-### Key Test Scenarios
-- `autoDeskew.test.ts`: Projection profile variance tilt estimation across various angles (-45° to +45°).
-- `thaiTextNormalizer.test.ts`: Thai floating vowel normalization, tone mark order correction, and Thai digit conversion.
-- `documentIntelligence.test.ts`: Bank slip detection, receipt layout analysis, and smart insight generation.
-- `meterOcr.test.ts`: Blood pressure multi-line splitting and systolic/diastolic/pulse parsing.
-- `imageDecoder.test.ts`: Digits 0–9 under both sampling modes, decimal point detection, clean termination on whitespace, zero confidence on blank frames, dimmed-pixel noise immunity test, and auto-align recovery on shifted crops.
-- `cropToContent.test.ts`: Light-on-dark, dark-on-light detection, and low-contrast rejection.
-- `consensus.test.ts`: Exact match confidence boosting, single-character divergence, length mismatches, and boundary thresholds.
-- `textConsensus.test.ts`: Levenshtein similarity validation on matching text, single-typo differences, and dissimilar outputs.
-- `formatAsMarkdown.test.ts`: Heading classification thresholds, bullet normalization, paragraph merging, and empty input handling.
-
-### Sample Verification
-
-Benchmarked against procedural test vectors:
-
-| Sample | Ground Truth | Witness A | Witness B | Consensus Result |
-|---|---|---|---|---|
-| Clean | `42.8` | `42.8` (44% conf.) | `42.8` (63% conf.) | Agree (`42.8`, 73% combined) |
-| Glare | `178.2` | `178.2` (56% conf.) | `178.2` (62% conf.) | Agree (`178.2`, 72% combined) |
-| Blurry | `905.1` | `905.1` (48% conf.) | `905.1` (58% conf.) | Agree (`905.1`, 68% combined) |
-
 ---
 
-## Tech Stack
+## 📄 ข้อตกลงสิทธิ์การใช้งาน (License)
 
-- **Framework**: Next.js 16 (App Router), React 19, TypeScript
-- **Styling**: Tailwind CSS
-- **OCR Engine**: [Tesseract.js](https://github.com/naptha/tesseract.js) (WASM, client-side execution)
-- **Testing**: Vitest
-- **Deployment**: Static build (compatible with any static web host or edge CDN)
-
----
-
-## Getting Started
-
-```bash
-git clone https://github.com/Shuumei/ocr-dual-witness-pipeline.git
-cd ocr-dual-witness-pipeline
-npm install
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000). No environment variables or credentials required.
-
----
-
-## Architectural Decisions
-
-- **Deterministic In-Browser Execution vs. Cloud APIs**:
-  OCR execution runs entirely on the client. This avoids vendor lock-in, eliminates recurring per-call inference costs, removes API authentication complexity, and ensures that sensitive document images never leave the user's browser.
-- **Dual-Witness Independence**:
-  Using orthogonal sampling and segmentation modes ensures that systematic errors (e.g. localized lens flare or non-standard font kerning) don't produce high-confidence false positives.
-- **Rule-Based Layout Inference**:
-  Markdown generation uses geometric heuristics derived from bounding boxes instead of probabilistic text rewriting, preserving literal text accuracy without hallucinations.
+โปรเจกต์นี้เผยแพร่ภายใต้สัญญาอนุญาต [MIT License](LICENSE)

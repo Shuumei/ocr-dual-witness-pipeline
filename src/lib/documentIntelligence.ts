@@ -7,7 +7,13 @@
 import { thaiDigitsToArabic } from "./thaiTextNormalizer";
 import type { OcrLine } from "./ocrTypes";
 
-export type DocumentType = "bank_slip" | "receipt_invoice" | "general_document";
+export type DocumentType =
+  | "bank_slip"
+  | "receipt_invoice"
+  | "id_card"
+  | "medical_document"
+  | "official_contract"
+  | "general_document";
 
 export interface BankInfo {
   name: string;
@@ -398,6 +404,8 @@ export function matchThaiBank(text: string): BankInfo | undefined {
 
 export interface VisionDocumentData {
   docType?: DocumentType;
+  documentTitle?: string | null;
+  summary?: string | null;
   bankName?: string | null;
   amount?: number | null;
   amountFormatted?: string | null;
@@ -408,15 +416,26 @@ export interface VisionDocumentData {
   merchantName?: string | null;
   taxId?: string | null;
   total?: number | null;
+  subtotal?: number | null;
   vat?: number | null;
-  items?: Array<{ name: string; price: number }>;
+  items?: Array<{ name: string; qty?: number; price: number; total?: number }>;
+  metadataFields?: Record<string, string>;
   markdown?: string;
   confidence?: number;
 }
 
 export function buildIntelligenceFromVision(d: VisionDocumentData): DocumentIntelligenceResult {
+  const knownTypes: DocumentType[] = [
+    "bank_slip",
+    "receipt_invoice",
+    "id_card",
+    "medical_document",
+    "official_contract",
+    "general_document",
+  ];
+
   const docType: DocumentType =
-    d.docType && ["bank_slip", "receipt_invoice", "general_document"].includes(d.docType)
+    d.docType && knownTypes.includes(d.docType)
       ? d.docType
       : d.bankName || d.amountFormatted
       ? "bank_slip"
@@ -446,24 +465,44 @@ export function buildIntelligenceFromVision(d: VisionDocumentData): DocumentInte
   if (docType === "receipt_invoice" || d.merchantName || d.total) {
     const tot = d.total ? Number(d.total) : undefined;
     const v = d.vat ? Number(d.vat) : undefined;
+    const sub = d.subtotal ? Number(d.subtotal) : undefined;
     receipt = {
       merchantName: d.merchantName || undefined,
       taxId: d.taxId || undefined,
+      dateTime: d.dateTime || undefined,
+      subtotal: sub,
       total: tot,
       totalFormatted: tot ? `${tot.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท` : undefined,
       vat: v,
       vatFormatted: v ? `${v.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท` : undefined,
-      lineItems: (d.items || []).map((i) => ({ description: i.name, price: i.price })),
+      lineItems: (d.items || []).map((i) => ({ description: i.name, qty: i.qty, price: i.price })),
     };
   }
 
   let extractedMarkdownTable: string | undefined = undefined;
   if (d.items && d.items.length > 0) {
-    extractedMarkdownTable = [
-      "| รายการสินค้า / บริการ | ราคา (บาท) |",
-      "|:---|---:|",
-      ...d.items.map((i) => `| ${i.name} | ${i.price.toLocaleString("th-TH", { minimumFractionDigits: 2 })} |`),
-    ].join("\n");
+    const hasQty = d.items.some((i) => i.qty !== undefined && i.qty !== null);
+    if (hasQty) {
+      extractedMarkdownTable = [
+        "| ลำดับ | รายการสินค้า / บริการ | จำนวน | ราคา/หน่วย | รวมเงิน (บาท) |",
+        "|:---:|:---|---:|---:|---:|",
+        ...d.items.map(
+          (i, idx) =>
+            `| ${idx + 1} | ${i.name} | ${i.qty ?? 1} | ${i.price.toLocaleString("th-TH", { minimumFractionDigits: 2 })} | ${(
+              (i.qty ?? 1) * i.price
+            ).toLocaleString("th-TH", { minimumFractionDigits: 2 })} |`
+        ),
+      ].join("\n");
+    } else {
+      extractedMarkdownTable = [
+        "| ลำดับ | รายการสินค้า / บริการ | ราคา (บาท) |",
+        "|:---:|:---|---:|",
+        ...d.items.map(
+          (i, idx) =>
+            `| ${idx + 1} | ${i.name} | ${i.price.toLocaleString("th-TH", { minimumFractionDigits: 2 })} |`
+        ),
+      ].join("\n");
+    }
   }
 
   const typeNameTh =
@@ -471,7 +510,24 @@ export function buildIntelligenceFromVision(d: VisionDocumentData): DocumentInte
       ? `สลิปโอนเงิน (${bankSlip?.bank?.name || d.bankName || "ธนาคาร"})`
       : docType === "receipt_invoice"
       ? `ใบเสร็จ / ใบกำกับภาษี (${receipt?.merchantName || d.merchantName || "ร้านค้า"})`
-      : "เอกสารทั่วไป (General Document)";
+      : docType === "id_card"
+      ? `บัตรประจำตัวประชาชน / เอกสารยืนยันตัวตน`
+      : docType === "medical_document"
+      ? `เอกสารทางการแพทย์ / ผลตรวจแล็บ`
+      : docType === "official_contract"
+      ? `หนังสือราชการ / สัญญา / ข้อตกลง`
+      : d.documentTitle || "เอกสารทั่วไป (General Document)";
+
+  const insights: string[] = [`ประเภทเอกสาร: ${typeNameTh}`];
+  if (d.summary) {
+    insights.push(`สรุปสาระสำคัญ: ${d.summary}`);
+  }
+  if (d.metadataFields && typeof d.metadataFields === "object") {
+    for (const [k, v] of Object.entries(d.metadataFields)) {
+      if (v) insights.push(`${k}: ${v}`);
+    }
+  }
+  insights.push("วิเคราะห์และจัดโครงสร้างด้วย Gemini Vision Intelligence");
 
   return {
     docType,
@@ -480,10 +536,7 @@ export function buildIntelligenceFromVision(d: VisionDocumentData): DocumentInte
     bankSlip,
     receipt,
     extractedMarkdownTable,
-    keyInsights: [
-      `ตรวจพบ: ${typeNameTh}`,
-      "วิเคราะห์ด้วย Cloud Vision Engine (Google Gemini 2.5 Flash Lite)",
-    ],
+    keyInsights: insights,
   };
 }
 

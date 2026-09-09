@@ -51,20 +51,20 @@ export function StepProgress({
               className={cn(
                 "relative flex items-start gap-3 rounded-xl border p-3.5 transition-all",
                 isCurrent &&
-                  "border-indigo-500/60 bg-indigo-950/30 text-indigo-200 shadow-md shadow-indigo-950/50 ring-1 ring-indigo-500/30",
+                  "border-black bg-slate-100 text-slate-950 shadow-xs",
                 isCompleted &&
-                  "border-emerald-500/40 bg-emerald-950/20 text-emerald-200",
+                  "border-emerald-200 bg-emerald-50/70 text-emerald-950",
                 isUpcoming &&
-                  "border-slate-800/80 bg-slate-950/30 text-slate-500"
+                  "border-slate-200/80 bg-slate-50/60 text-slate-400"
               )}
             >
               {/* Icon badge */}
               <div
                 className={cn(
                   "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all",
-                  isCompleted && "bg-emerald-500 text-slate-950",
-                  isCurrent && "bg-indigo-500 text-white animate-pulse shadow-sm shadow-indigo-500/50",
-                  isUpcoming && "bg-slate-800 text-slate-400"
+                  isCompleted && "bg-emerald-600 text-white",
+                  isCurrent && "bg-black text-white",
+                  isUpcoming && "bg-slate-200 text-slate-500"
                 )}
               >
                 {isCompleted ? (
@@ -82,26 +82,23 @@ export function StepProgress({
                   <span
                     className={cn(
                       "text-xs font-semibold tracking-wide",
-                      isCurrent && "text-indigo-300 font-bold",
-                      isCompleted && "text-emerald-300 font-bold",
+                      isCurrent && "text-black font-bold",
+                      isCompleted && "text-emerald-700 font-bold",
                       isUpcoming && "text-slate-400"
                     )}
                   >
                     Step {step.id}
                   </span>
-                  {isCurrent && (
-                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-indigo-400 animate-ping" />
-                  )}
                 </div>
                 <div
                   className={cn(
                     "text-xs font-medium truncate mt-0.5",
-                    isCurrent ? "text-slate-100" : isCompleted ? "text-slate-200" : "text-slate-400"
+                    isCurrent ? "text-slate-900" : isCompleted ? "text-slate-800" : "text-slate-500"
                   )}
                 >
                   {step.title}
                 </div>
-                <div className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                <div className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">
                   {step.description}
                 </div>
               </div>

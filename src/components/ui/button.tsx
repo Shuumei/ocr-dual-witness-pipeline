@@ -17,23 +17,23 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "default", size = "default", type = "button", ...props }, ref) => {
     const baseStyles =
-      "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-xs sm:text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none active:scale-[0.98]";
+      "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-xs sm:text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none active:scale-[0.99]";
 
     const variantStyles = {
       default:
-        "bg-slate-100 text-slate-900 shadow-sm hover:bg-white hover:shadow-md",
+        "bg-black text-white shadow-xs hover:bg-slate-800 active:bg-slate-950",
       secondary:
-        "bg-slate-800 text-slate-200 border border-slate-700/80 hover:bg-slate-700/80 hover:text-white shadow-sm",
+        "bg-white text-slate-800 border border-slate-200 hover:bg-slate-100 hover:border-slate-300 shadow-xs",
       outline:
-        "border border-slate-700 bg-transparent text-slate-300 hover:border-slate-500 hover:bg-slate-800/60 hover:text-white",
+        "border border-slate-300 bg-white text-slate-800 hover:border-black hover:bg-slate-50 hover:text-black shadow-xs",
       ghost:
-        "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200",
+        "text-slate-600 hover:bg-slate-100 hover:text-black",
       destructive:
-        "bg-rose-600 text-white shadow-sm hover:bg-rose-500 hover:shadow-rose-600/30",
+        "bg-rose-600 text-white shadow-xs hover:bg-rose-700",
       emerald:
-        "bg-emerald-600 text-white shadow-sm shadow-emerald-950/30 hover:bg-emerald-500 hover:shadow-emerald-600/20",
+        "bg-emerald-600 text-white shadow-xs hover:bg-emerald-700",
       indigo:
-        "bg-indigo-600 text-white shadow-sm shadow-indigo-950/30 hover:bg-indigo-500 hover:shadow-indigo-600/20",
+        "bg-black text-white shadow-xs hover:bg-slate-800 active:bg-slate-950",
     };
 
     const sizeStyles = {
