@@ -18,27 +18,6 @@ function sampleGrid(px: PixelSource, step: number): number[] {
   return values;
 }
 
-function cornerAverage(px: PixelSource, patch = 8): number {
-  const points: [number, number][] = [
-    [0, 0],
-    [px.width - 1, 0],
-    [0, px.height - 1],
-    [px.width - 1, px.height - 1],
-  ];
-  let sum = 0;
-  let count = 0;
-  for (const [cx, cy] of points) {
-    for (let dy = 0; dy < patch && cy + dy < px.height; dy++) {
-      for (let dx = 0; dx < patch && cx + dx < px.width; dx++) {
-        const x = cx === 0 ? cx + dx : cx - dx;
-        const y = cy === 0 ? cy + dy : cy - dy;
-        sum += luminanceAt(px, x, y);
-        count++;
-      }
-    }
-  }
-  return count === 0 ? 0 : sum / count;
-}
 
 /**
  * Samples border pixels around the perimeter to robustly determine background luminance.
